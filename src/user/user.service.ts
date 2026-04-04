@@ -1,27 +1,83 @@
-import { Injectable } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
+import { randomUUID } from 'node:crypto';
+import {
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { CreateUserDto, UserRole } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { User } from './entities/user.entity';
+import { User, UserResponse } from './entities/user.entity';
 
 @Injectable()
 export class UserService {
-  create(createUserDto: CreateUserDto): User {
-    throw new Error('Not implemented');
+  private readonly users: Map<string, User> = new Map();
+
+  private toResponse(user: User): UserResponse {
+    return {
+      id: user.id,
+      login: user.login,
+      role: user.role,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
   }
 
-  findAll(): User[] {
-    throw new Error('Not implemented');
+  create(createUserDto: CreateUserDto): UserResponse {
+    var now = Date.now();
+    var user: User = {
+      id: randomUUID(),
+      login: createUserDto.login,
+      password: createUserDto.password,
+      role: createUserDto.role ?? UserRole.VIEWER,
+      createdAt: now,
+      updatedAt: now,
+    };
+
+    this.users.set(user.id, user);
+
+    return this.toResponse(user);
   }
 
-  findOne(id: string): User {
-    throw new Error('Not implemented');
+  findAll(): UserResponse[] {
+    return Array.from(this.users.values()).map((user) => this.toResponse(user));
   }
 
-  update(id: string, updateUserDto: UpdateUserDto): User {
-    throw new Error('Not implemented');
+  findOne(id: string): UserResponse {
+    var user = this.users.get(id);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.toResponse(user);
+  }
+
+  update(id: string, updateUserDto: UpdateUserDto): UserResponse {
+    var user = this.users.get(id);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    if (user.password !== updateUserDto.oldPassword) {
+      throw new ForbiddenException('Old password is wrong');
+    }
+
+    user.password = updateUserDto.newPassword;
+    user.updatedAt = Date.now();
+
+    this.users.set(user.id, user);
+
+    return this.toResponse(user);
   }
 
   remove(id: string): void {
-    throw new Error('Not implemented');
+    var user = this.users.get(id);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    this.users.delete(id);
   }
 }

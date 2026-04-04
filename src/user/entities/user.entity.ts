@@ -8,3 +8,5 @@ export class User {
     createdAt: number;
     updatedAt: number;
 }
+
+export type UserResponse = Omit<User, 'password'>;
