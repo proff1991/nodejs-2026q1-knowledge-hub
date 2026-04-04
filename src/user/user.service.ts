@@ -1,26 +1,27 @@
 import { Injectable } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { User } from './entities/user.entity';
 
 @Injectable()
 export class UserService {
-  create(createUserDto: CreateUserDto) {
-    return 'This action adds a new user';
+  create(createUserDto: CreateUserDto): User {
+    throw new Error('Not implemented');
   }
 
-  findAll() {
-    return `This action returns all user`;
+  findAll(): User[] {
+    throw new Error('Not implemented');
   }
 
-  findOne(id: number) {
-    return `This action returns a #${id} user`;
+  findOne(id: string): User {
+    throw new Error('Not implemented');
   }
 
-  update(id: number, updateUserDto: UpdateUserDto) {
-    return `This action updates a #${id} user`;
+  update(id: string, updateUserDto: UpdateUserDto): User {
+    throw new Error('Not implemented');
   }
 
-  remove(id: number) {
-    return `This action removes a #${id} user`;
+  remove(id: string): void {
+    throw new Error('Not implemented');
   }
 }
