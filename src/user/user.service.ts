@@ -1,14 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import {
-  ForbiddenException,
-  Injectable,
-  NotFoundException,
+  ForbiddenException
+  , Injectable
+  , NotFoundException
 } from '@nestjs/common';
-import { CreateUserDto, UserRole } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { User, UserResponse } from './entities/user.entity';
 import { ArticleService } from '../article/article.service';
 import { CommentService } from '../comment/comment.service';
+import { CreateUserDto, UserRole } from './dto/create-user.dto';
+import { ListUserQueryDto } from './dto/list-user-query.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
+import { User, UserResponse } from './entities/user.entity';
+
+type PaginatedUserResponse = {
+  total: number;
+  page: number;
+  limit: number;
+  data: UserResponse[];
+};
 
 @Injectable()
 export class UserService {
@@ -45,8 +53,47 @@ export class UserService {
     return this.toResponse(user);
   }
 
-  findAll(): UserResponse[] {
-    return Array.from(this.users.values()).map((user) => this.toResponse(user));
+  findAll(query?: ListUserQueryDto): UserResponse[] | PaginatedUserResponse {
+    var users = Array.from(this.users.values()).map((user) => this.toResponse(user));
+    var hasPagination =
+      typeof query?.page !== 'undefined' || typeof query?.limit !== 'undefined';
+    var hasSorting =
+      typeof query?.sortBy !== 'undefined' || typeof query?.order !== 'undefined';
+
+    if (query?.sortBy) {
+      var order = query.order ?? 'asc';
+
+      users.sort((a, b) => {
+        var left = a[query.sortBy!];
+        var right = b[query.sortBy!];
+
+        if (typeof left === 'number' && typeof right === 'number') {
+          var numericResult = left - right;
+          return order === 'desc' ? numericResult * -1 : numericResult;
+        }
+
+        var stringResult = String(left).localeCompare(String(right));
+        return order === 'desc' ? stringResult * -1 : stringResult;
+      });
+    }
+
+    if (!hasPagination && !hasSorting) {
+      return users;
+    }
+
+    var page = query?.page ?? 1;
+    var limit = (query?.limit ?? users.length) || 1;
+    var total = users.length;
+    var start = (page - 1) * limit;
+    var end = start + limit;
+    var data = users.slice(start, end);
+
+    return {
+      total,
+      page,
+      limit,
+      data,
+    };
   }
 
   findOne(id: string): UserResponse {
