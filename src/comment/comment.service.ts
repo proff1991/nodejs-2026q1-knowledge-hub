@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import {
-  Injectable
+  forwardRef
+  , Inject
+  , Injectable
   , NotFoundException
   , UnprocessableEntityException
 } from '@nestjs/common';
@@ -12,7 +14,10 @@ import { Comment } from './entities/comment.entity';
 export class CommentService {
   private readonly comments: Map<string, Comment> = new Map();
 
-  constructor(private readonly articleService: ArticleService) { }
+  constructor(
+    @Inject(forwardRef(() => ArticleService))
+    private readonly articleService: ArticleService,
+  ) { }
 
   create(createCommentDto: CreateCommentDto): Comment {
     try {
