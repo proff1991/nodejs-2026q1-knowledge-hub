@@ -9,7 +9,7 @@ The application provides CRUD operations for:
 - categories
 - comments
 
-The project uses **in-memory storage** and is organized by Nest modules, controllers, and services. Swagger documentation is available at `/doc`. :contentReference[oaicite:2]{index=2}
+The project uses **in-memory storage** and is organized by Nest modules, controllers, and services. Swagger documentation is available at `/doc`.
 
 ## Features
 
@@ -52,7 +52,7 @@ The project uses **in-memory storage** and is organized by Nest modules, control
 - class-transformer
 - Swagger (`@nestjs/swagger`)
 
-> According to the assignment, the application should use **Node.js 24.x.x**, minimum **24.10.0**. :contentReference[oaicite:3]{index=3}
+> According to the assignment, the application should use **Node.js 24.x.x**, minimum **24.10.0**.
 
 ## Installation
 
@@ -93,7 +93,7 @@ npm run build
 npm run start:prod
 ```
 
-Current scripts are defined in `package.json`. :contentReference[oaicite:5]{index=5}
+Current scripts are defined in `package.json`.
 
 ## Testing
 
@@ -117,7 +117,7 @@ After starting the application, Swagger UI is available at:
 http://localhost:4000/doc
 ```
 
-The assignment requires OpenAPI documentation at `/doc`. :contentReference[oaicite:6]{index=6}
+The assignment requires OpenAPI documentation at `/doc`.
 
 ## API overview
 
@@ -126,7 +126,7 @@ Base routes:
 - `/user`
 - `/article`
 - `/category`
-- `/comment` :contentReference[oaicite:7]{index=7}
+- `/comment`
 
 ---
 
@@ -302,11 +302,11 @@ Delete comment.
 
 ### Validation
 
-Incoming request bodies are validated with DTO classes and validation decorators. A global `ValidationPipe` is used. :contentReference[oaicite:8]{index=8} :contentReference[oaicite:9]{index=9}
+Incoming request bodies are validated with DTO classes and validation decorators. A global `ValidationPipe` is used.
 
 ### User password
 
-User passwords are stored internally but are **excluded from API responses**, as required by the assignment. :contentReference[oaicite:10]{index=10}
+User passwords are stored internally but are **excluded from API responses**, as required by the assignment.
 
 ### Cascading behavior
 
@@ -316,7 +316,7 @@ User passwords are stored internally but are **excluded from API responses**, as
 - deleting a category:
   - sets `categoryId = null` in related articles
 - deleting an article:
-  - removes related comments :contentReference[oaicite:11]{index=11}
+  - removes related comments
 
 ## Project structure
 
@@ -334,5 +334,5 @@ test/
 
 ## Notes
 
-- The application currently uses **in-memory data storage**, so data is reset after restart. :contentReference[oaicite:12]{index=12}
-- The architecture is prepared for future migration to a persistent database. :contentReference[oaicite:13]{index=13}
+- The application currently uses **in-memory data storage**, so data is reset after restart.
+- The architecture is prepared for future migration to a persistent database.
