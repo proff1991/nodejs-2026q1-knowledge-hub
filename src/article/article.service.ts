@@ -100,8 +100,8 @@ export class ArticleService {
       return articles;
     }
 
-    var page = query?.page ?? 1;
-    var limit = (query?.limit ?? articles.length) || 1;
+    var page = Number(query?.page ?? 1);
+    var limit = Number((query?.limit ?? articles.length) || 1);
     var total = articles.length;
     var start = (page - 1) * limit;
     var end = start + limit;

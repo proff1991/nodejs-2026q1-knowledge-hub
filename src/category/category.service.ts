@@ -58,8 +58,8 @@ export class CategoryService {
       return categories;
     }
 
-    var page = query?.page ?? 1;
-    var limit = (query?.limit ?? categories.length) || 1;
+    var page = Number(query?.page ?? 1);
+    var limit = Number((query?.limit ?? categories.length) || 1);
     var total = categories.length;
     var start = (page - 1) * limit;
     var end = start + limit;

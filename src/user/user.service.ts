@@ -81,8 +81,8 @@ export class UserService {
       return users;
     }
 
-    var page = query?.page ?? 1;
-    var limit = (query?.limit ?? users.length) || 1;
+    var page = Number(query?.page ?? 1);
+    var limit = Number((query?.limit ?? users.length) || 1);
     var total = users.length;
     var start = (page - 1) * limit;
     var end = start + limit;
