@@ -3,10 +3,13 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { Category } from './entities/category.entity';
+import { ArticleService } from '../article/article.service';
 
 @Injectable()
 export class CategoryService {
   private readonly categories: Map<string, Category> = new Map();
+
+  constructor(private readonly articleService: ArticleService) {}
 
   create(createCategoryDto: CreateCategoryDto): Category {
     var category: Category = {
@@ -61,6 +64,7 @@ export class CategoryService {
       throw new NotFoundException('Category not found');
     }
 
+    this.articleService.nullifyCategoryId(id);
     this.categories.delete(id);
   }
 }

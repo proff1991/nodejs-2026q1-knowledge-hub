@@ -140,4 +140,14 @@ export class ArticleService {
     this.commentService.removeByArticleId(id);
     this.articles.delete(id);
   }
+
+  nullifyCategoryId(categoryId: string): void {
+    for (var article of this.articles.values()) {
+      if (article.categoryId === categoryId) {
+        article.categoryId = null;
+        article.updatedAt = Date.now();
+        this.articles.set(article.id, article);
+      }
+    }
+  }
 }
