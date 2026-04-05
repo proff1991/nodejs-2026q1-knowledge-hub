@@ -17,7 +17,7 @@ export class UserService {
   constructor(
     private readonly articleService: ArticleService,
     private readonly commentService: CommentService,
-  ) {}
+  ) { }
 
   private toResponse(user: User): UserResponse {
     return {
@@ -85,6 +85,8 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
+    this.articleService.nullifyAuthorId(id);
+    this.commentService.removeByAuthorId(id);
     this.users.delete(id);
   }
 }
