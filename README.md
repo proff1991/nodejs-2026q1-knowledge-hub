@@ -1,84 +1,338 @@
-# Knowledge Hub
+# Knowledge Hub API
 
-## Prerequisites
+REST API for a **Knowledge Hub** platform built with **Nest.js** and **TypeScript**.
 
-- Git - [Download & Install Git](https://git-scm.com/downloads).
-- Node.js - [Download & Install Node.js](https://nodejs.org/en/download/) and the npm package manager.
+The application provides CRUD operations for:
 
-## Downloading
+- users
+- articles
+- categories
+- comments
 
-```
-git clone {repository URL}
-```
+The project uses **in-memory storage** and is organized by Nest modules, controllers, and services. Swagger documentation is available at `/doc`.
 
-## Installing NPM modules
+## Features
 
-```
+### Basic scope
+
+- Nest.js application with domain-based structure
+- `UserModule`
+- `ArticleModule`
+- `CategoryModule`
+- `CommentModule`
+- request validation with DTO classes
+- in-memory data storage
+- all base e2e tests pass
+
+### Advanced scope
+
+- DTO validation via `ValidationPipe`
+- article filtering by:
+  - `status`
+  - `categoryId`
+  - `tag`
+- Swagger / OpenAPI documentation at `/doc`
+- cascading delete behavior:
+  - deleting a user sets `authorId = null` in related articles and removes related comments
+  - deleting a category sets `categoryId = null` in related articles
+  - deleting an article removes its comments
+
+### Hacker scope
+
+- pagination for list endpoints
+- sorting for list endpoints
+- additional automated e2e tests
+
+## Tech stack
+
+- Node.js 24.10.0+
+- Nest.js
+- TypeScript
+- class-validator
+- class-transformer
+- Swagger (`@nestjs/swagger`)
+
+> According to the assignment, the application should use **Node.js 24.x.x**, minimum **24.10.0**.
+
+## Installation
+
+```bash
 npm install
 ```
 
-## Running application
+## Environment variables
 
+Create a `.env` file in the project root.
+
+Example:
+
+```env
+PORT=4000
 ```
+
+By default, the application runs on port `4000`. :
+
+## Running the application
+
+### Development mode
+
+```bash
+npm run start:dev
+```
+
+### Standard start
+
+```bash
 npm start
 ```
 
-After starting the app on port (4000 as default) you can open
-in your browser OpenAPI documentation by typing http://localhost:4000/doc/.
-For more information about OpenAPI/Swagger please visit https://swagger.io/.
+### Production mode
+
+```bash
+npm run build
+npm run start:prod
+```
+
+Current scripts are defined in `package.json`.
 
 ## Testing
 
-After application running open new terminal and enter:
+Run all tests:
 
-To run all tests without authorization
-
-```
+```bash
 npm run test
 ```
 
-To run only one of all test suites
+Run lint:
 
-```
-npm run test -- <path to suite>
-```
-
-To run all test with authorization
-
-```
-npm run test:auth
-```
-
-To run only specific test suite with authorization
-
-```
-npm run test:auth -- <path to suite>
-```
-
-To run refresh token tests
-
-```
-npm run test:refresh
-```
-
-To run RBAC (role-based access control) tests
-
-```
-npm run test:rbac
-```
-
-### Auto-fix and format
-
-```
+```bash
 npm run lint
 ```
 
+## Swagger documentation
+
+After starting the application, Swagger UI is available at:
+
+```text
+http://localhost:4000/doc
 ```
-npm run format
+
+The assignment requires OpenAPI documentation at `/doc`.
+
+## API overview
+
+Base routes:
+
+- `/user`
+- `/article`
+- `/category`
+- `/comment`
+
+---
+
+## User endpoints
+
+### `GET /user`
+Get all users.
+
+Supports optional pagination and sorting:
+- `page`
+- `limit`
+- `sortBy`
+- `order`
+
+### `GET /user/:id`
+Get user by id.
+
+### `POST /user`
+Create user.
+
+Example body:
+
+```json
+{
+  "login": "alex",
+  "password": "secret",
+  "role": "viewer"
+}
 ```
 
-### Debugging in VSCode
+### `PUT /user/:id`
+Update user password.
 
-Press <kbd>F5</kbd> to debug.
+Example body:
 
-For more information, visit: https://code.visualstudio.com/docs/editor/debugging
+```json
+{
+  "oldPassword": "secret",
+  "newPassword": "new-secret"
+}
+```
+
+### `DELETE /user/:id`
+Delete user.
+
+---
+
+## Category endpoints
+
+### `GET /category`
+Get all categories.
+
+Supports optional pagination and sorting:
+- `page`
+- `limit`
+- `sortBy`
+- `order`
+
+### `GET /category/:id`
+Get category by id.
+
+### `POST /category`
+Create category.
+
+Example body:
+
+```json
+{
+  "name": "Node.js",
+  "description": "Articles about Node.js backend development"
+}
+```
+
+### `PUT /category/:id`
+Update category.
+
+### `DELETE /category/:id`
+Delete category.
+
+---
+
+## Article endpoints
+
+### `GET /article`
+Get all articles.
+
+Supports filtering:
+- `status`
+- `categoryId`
+- `tag`
+
+Supports optional pagination and sorting:
+- `page`
+- `limit`
+- `sortBy`
+- `order`
+
+Example:
+
+```text
+/article?status=published&tag=nodejs&page=1&limit=10&sortBy=title&order=asc
+```
+
+### `GET /article/:id`
+Get article by id.
+
+### `POST /article`
+Create article.
+
+Example body:
+
+```json
+{
+  "title": "How Event Loop works in Node.js",
+  "content": "Detailed explanation of timers, poll and check phases.",
+  "status": "draft",
+  "authorId": null,
+  "categoryId": null,
+  "tags": ["nodejs", "javascript"]
+}
+```
+
+### `PUT /article/:id`
+Update article.
+
+### `DELETE /article/:id`
+Delete article.
+
+---
+
+## Comment endpoints
+
+### `GET /comment`
+Get comments for a specific article.
+
+Required query parameter:
+- `articleId`
+
+Supports optional pagination and sorting:
+- `page`
+- `limit`
+- `sortBy`
+- `order`
+
+Example:
+
+```text
+/comment?articleId=550e8400-e29b-41d4-a716-446655440000&page=1&limit=10&sortBy=createdAt&order=desc
+```
+
+### `GET /comment/:id`
+Get comment by id.
+
+### `POST /comment`
+Create comment.
+
+Example body:
+
+```json
+{
+  "content": "Very useful article, thanks!",
+  "articleId": "550e8400-e29b-41d4-a716-446655440000",
+  "authorId": null
+}
+```
+
+### `DELETE /comment/:id`
+Delete comment.
+
+---
+
+## Response behavior
+
+### Validation
+
+Incoming request bodies are validated with DTO classes and validation decorators. A global `ValidationPipe` is used.
+
+### User password
+
+User passwords are stored internally but are **excluded from API responses**, as required by the assignment.
+
+### Cascading behavior
+
+- deleting a user:
+  - sets `authorId = null` in related articles
+  - removes related comments
+- deleting a category:
+  - sets `categoryId = null` in related articles
+- deleting an article:
+  - removes related comments
+
+## Project structure
+
+```text
+src/
+  article/
+  category/
+  comment/
+  user/
+  main.ts
+  app.module.ts
+test/
+  *.e2e.spec.ts
+```
+
+## Notes
+
+- The application currently uses **in-memory data storage**, so data is reset after restart.
+- The architecture is prepared for future migration to a persistent database.

@@ -1,8 +1,38 @@
+import 'dotenv/config';
+import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
-async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
-  await app.listen(4000);
-}
+var bootstrap = async (): Promise<void> => {
+  var app = await NestFactory.create(AppModule);
+  var rawPort = process.env.PORT;
+  var port = rawPort ? Number(rawPort) : 4000;
+
+  if (!Number.isInteger(port) || port <= 0) {
+    throw new Error('PORT must be a positive integer');
+  }
+
+  app.useGlobalPipes(
+    new ValidationPipe({
+      whitelist: true,
+      transform: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
+
+  var config = new DocumentBuilder()
+    .setTitle('Knowledge Hub API')
+    .setDescription('REST API for the Knowledge Hub platform')
+    .setVersion('1.0')
+    .build();
+
+  var documentFactory = (): ReturnType<typeof SwaggerModule.createDocument> =>
+    SwaggerModule.createDocument(app, config);
+
+  SwaggerModule.setup('doc', app, documentFactory);
+
+  await app.listen(port);
+};
+
 bootstrap();
