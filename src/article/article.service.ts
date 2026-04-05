@@ -150,4 +150,14 @@ export class ArticleService {
       }
     }
   }
+
+  nullifyAuthorId(authorId: string): void {
+    for (var article of this.articles.values()) {
+      if (article.authorId === authorId) {
+        article.authorId = null;
+        article.updatedAt = Date.now();
+        this.articles.set(article.id, article);
+      }
+    }
+  }
 }
