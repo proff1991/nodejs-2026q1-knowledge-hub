@@ -75,4 +75,12 @@ export class CommentService {
       }
     }
   }
+
+  removeByAuthorId(authorId: string): void {
+    for (var [commentId, comment] of this.comments.entries()) {
+      if (comment.authorId === authorId) {
+        this.comments.delete(commentId);
+      }
+    }
+  }
 }
