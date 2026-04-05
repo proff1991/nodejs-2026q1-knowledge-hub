@@ -7,10 +7,17 @@ import {
 import { CreateUserDto, UserRole } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { User, UserResponse } from './entities/user.entity';
+import { ArticleService } from '../article/article.service';
+import { CommentService } from '../comment/comment.service';
 
 @Injectable()
 export class UserService {
   private readonly users: Map<string, User> = new Map();
+
+  constructor(
+    private readonly articleService: ArticleService,
+    private readonly commentService: CommentService,
+  ) {}
 
   private toResponse(user: User): UserResponse {
     return {
