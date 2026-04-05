@@ -5,7 +5,7 @@ import {
     , expect
     , it
 } from '@jest/globals';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request = require('supertest');
 import { AppModule } from '../src/app.module';
@@ -20,6 +20,15 @@ describe('Hacker scope additional e2e tests', () => {
         }).compile();
 
         app = moduleRef.createNestApplication();
+
+        app.useGlobalPipes(
+            new ValidationPipe({
+                whitelist: true,
+                transform: true,
+                forbidNonWhitelisted: true,
+            }),
+        );
+
         await app.init();
         server = app.getHttpServer();
     });
