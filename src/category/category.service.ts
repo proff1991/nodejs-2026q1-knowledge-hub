@@ -1,9 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { ArticleService } from '../article/article.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
+import { ListCategoryQueryDto } from './dto/list-category-query.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
 import { Category } from './entities/category.entity';
-import { ArticleService } from '../article/article.service';
+
+type PaginatedCategoryResponse = {
+  total: number;
+  page: number;
+  limit: number;
+  data: Category[];
+};
 
 @Injectable()
 export class CategoryService {
@@ -23,8 +31,46 @@ export class CategoryService {
     return category;
   }
 
-  findAll(): Category[] {
-    return Array.from(this.categories.values());
+  findAll(query?: ListCategoryQueryDto): Category[] | PaginatedCategoryResponse {
+    var categories = Array.from(this.categories.values());
+    var hasPagination =
+      typeof query?.page !== 'undefined' || typeof query?.limit !== 'undefined';
+    var hasSorting =
+      typeof query?.sortBy !== 'undefined' || typeof query?.order !== 'undefined';
+
+    if (query?.sortBy) {
+      var order = query.order ?? 'asc';
+
+      categories.sort((a, b) => {
+        var left = a[query.sortBy!] ?? '';
+        var right = b[query.sortBy!] ?? '';
+        var result = String(left).localeCompare(String(right));
+
+        if (order === 'desc') {
+          return result * -1;
+        }
+
+        return result;
+      });
+    }
+
+    if (!hasPagination && !hasSorting) {
+      return categories;
+    }
+
+    var page = query?.page ?? 1;
+    var limit = (query?.limit ?? categories.length) || 1;
+    var total = categories.length;
+    var start = (page - 1) * limit;
+    var end = start + limit;
+    var data = categories.slice(start, end);
+
+    return {
+      total,
+      page,
+      limit,
+      data,
+    };
   }
 
   findOne(id: string): Category {

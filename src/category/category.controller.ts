@@ -9,11 +9,13 @@ import {
   , ParseUUIDPipe
   , Post
   , Put
+  , Query
 } from '@nestjs/common';
+import { ApiTags } from '@nestjs/swagger';
 import { CategoryService } from './category.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
-import { ApiTags } from '@nestjs/swagger';
+import { ListCategoryQueryDto } from './dto/list-category-query.dto';
 
 @ApiTags('category')
 @Controller('category')
@@ -26,8 +28,8 @@ export class CategoryController {
   }
 
   @Get()
-  findAll() {
-    return this.categoryService.findAll();
+  findAll(@Query() query: ListCategoryQueryDto) {
+    return this.categoryService.findAll(query);
   }
 
   @Get(':id')
