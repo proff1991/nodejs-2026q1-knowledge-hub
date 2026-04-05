@@ -70,7 +70,7 @@ Example:
 PORT=4000
 ```
 
-By default, the application runs on port `4000`. :contentReference[oaicite:4]{index=4}
+By default, the application runs on port `4000`. :
 
 ## Running the application
 
