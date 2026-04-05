@@ -1,6 +1,7 @@
 import 'dotenv/config';
-import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 
 var bootstrap = async (): Promise<void> => {
@@ -19,6 +20,17 @@ var bootstrap = async (): Promise<void> => {
       forbidNonWhitelisted: true,
     }),
   );
+
+  var config = new DocumentBuilder()
+    .setTitle('Knowledge Hub API')
+    .setDescription('REST API for the Knowledge Hub platform')
+    .setVersion('1.0')
+    .build();
+
+  var documentFactory = (): ReturnType<typeof SwaggerModule.createDocument> =>
+    SwaggerModule.createDocument(app, config);
+
+  SwaggerModule.setup('doc', app, documentFactory);
 
   await app.listen(port);
 };
