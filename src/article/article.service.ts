@@ -1,8 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Inject,
+  Injectable,
+  NotFoundException,
+  forwardRef,
+} from '@nestjs/common';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { Article, ArticleStatus } from './entities/article.entity';
+import { CommentService } from '../comment/comment.service';
 
 type ArticleFilters = {
   status?: string;
@@ -13,6 +19,11 @@ type ArticleFilters = {
 @Injectable()
 export class ArticleService {
   private readonly articles: Map<string, Article> = new Map();
+
+  constructor(
+    @Inject(forwardRef(() => CommentService))
+    private readonly commentService: CommentService,
+  ) { }
 
   create(createArticleDto: CreateArticleDto): Article {
     var now = Date.now();
@@ -126,6 +137,7 @@ export class ArticleService {
       throw new NotFoundException('Article not found');
     }
 
+    this.commentService.removeByArticleId(id);
     this.articles.delete(id);
   }
 }
