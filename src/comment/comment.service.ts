@@ -9,6 +9,14 @@ import {
 import { ArticleService } from '../article/article.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { Comment } from './entities/comment.entity';
+import { ListCommentQueryDto } from './dto/list-comment-query.dto';
+
+type PaginatedCommentResponse = {
+  total: number;
+  page: number;
+  limit: number;
+  data: Comment[];
+};
 
 @Injectable()
 export class CommentService {
@@ -42,10 +50,49 @@ export class CommentService {
     return comment;
   }
 
-  findAll(articleId: string): Comment[] {
-    return Array.from(this.comments.values()).filter(
-      (comment) => comment.articleId === articleId,
+  findAll(query: ListCommentQueryDto): Comment[] | PaginatedCommentResponse {
+    var comments = Array.from(this.comments.values()).filter(
+      (comment) => comment.articleId === query.articleId,
     );
+    var hasPagination =
+      typeof query.page !== 'undefined' || typeof query.limit !== 'undefined';
+    var hasSorting =
+      typeof query.sortBy !== 'undefined' || typeof query.order !== 'undefined';
+
+    if (query.sortBy) {
+      var order = query.order ?? 'asc';
+
+      comments.sort((a, b) => {
+        var left = a[query.sortBy!];
+        var right = b[query.sortBy!];
+
+        if (typeof left === 'number' && typeof right === 'number') {
+          var numericResult = left - right;
+          return order === 'desc' ? numericResult * -1 : numericResult;
+        }
+
+        var stringResult = String(left).localeCompare(String(right));
+        return order === 'desc' ? stringResult * -1 : stringResult;
+      });
+    }
+
+    if (!hasPagination && !hasSorting) {
+      return comments;
+    }
+
+    var page = query.page ?? 1;
+    var limit = (query.limit ?? comments.length) || 1;
+    var total = comments.length;
+    var start = (page - 1) * limit;
+    var end = start + limit;
+    var data = comments.slice(start, end);
+
+    return {
+      total,
+      page,
+      limit,
+      data,
+    };
   }
 
   findOne(id: string): Comment {

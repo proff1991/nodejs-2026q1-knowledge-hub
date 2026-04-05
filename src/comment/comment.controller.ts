@@ -13,6 +13,7 @@ import {
 import { CommentService } from './comment.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { ApiTags } from '@nestjs/swagger';
+import { ListCommentQueryDto } from './dto/list-comment-query.dto';
 
 @ApiTags('comment')
 @Controller('comment')
@@ -25,10 +26,8 @@ export class CommentController {
   }
 
   @Get()
-  findAll(
-    @Query('articleId', new ParseUUIDPipe({ version: '4' })) articleId: string,
-  ) {
-    return this.commentService.findAll(articleId);
+  findAll(@Query() query: ListCommentQueryDto) {
+    return this.commentService.findAll(query);
   }
 
   @Get(':id')
