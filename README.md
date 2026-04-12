@@ -9,7 +9,10 @@ The application provides CRUD operations for:
 - categories
 - comments
 
-The project uses **in-memory storage** and is organized by Nest modules, controllers, and services. Swagger documentation is available at `/doc`.
+Swagger documentation is available at `/doc`.
+
+At the current stage, the application logic still uses **in-memory storage**.  
+A **PostgreSQL container** is prepared as part of the Docker infrastructure for the next assignment step.
 
 ## Features
 
@@ -51,6 +54,10 @@ The project uses **in-memory storage** and is organized by Nest modules, control
 - class-validator
 - class-transformer
 - Swagger (`@nestjs/swagger`)
+- Docker
+- Docker Compose
+- PostgreSQL
+- Adminer (optional, debug profile)
 
 > According to the assignment, the application should use **Node.js 24.x.x**, minimum **24.10.0**.
 
@@ -64,15 +71,31 @@ npm install
 
 Create a `.env` file in the project root.
 
-Example:
+You can use `.env.example` as a template:
+
+```bash
+cp .env.example .env
+```
+
+Example `.env.example`:
 
 ```env
 PORT=4000
+
+CRYPT_SALT=10
+JWT_SECRET_KEY=change_me
+JWT_SECRET_REFRESH_KEY=change_me_too
+TOKEN_EXPIRE_TIME=1h
+TOKEN_REFRESH_EXPIRE_TIME=24h
+
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=postgres
+POSTGRES_DB=knowledge_hub
+POSTGRES_HOST=db
+POSTGRES_PORT=5432
 ```
 
-By default, the application runs on port `4000`. :
-
-## Running the application
+## Running the application locally
 
 ### Development mode
 
@@ -94,6 +117,59 @@ npm run start:prod
 ```
 
 Current scripts are defined in `package.json`.
+
+## Running with Docker Compose
+
+Build and start the application with PostgreSQL:
+
+```bash
+docker-compose up --build
+```
+
+Stop containers:
+
+```bash
+docker-compose down
+```
+
+Stop containers and remove PostgreSQL volume:
+
+```bash
+docker-compose down -v
+```
+
+Run with optional Adminer debug service:
+
+```bash
+docker-compose --profile debug up --build
+```
+
+## Available services
+
+After startup, the following services are available:
+
+- API root: `http://localhost:4000/`
+- Swagger UI: `http://localhost:4000/doc`
+- PostgreSQL: `localhost:5432`
+- Adminer (debug profile only): `http://localhost:8080`
+
+## Docker infrastructure
+
+The project includes the following Docker services:
+
+- `app` — Knowledge Hub API container
+- `db` — PostgreSQL 16 container
+- `adminer` — optional database UI for local debugging
+
+Docker setup features:
+
+- multi-stage Docker build
+- production image based on `node:24-alpine`
+- non-root user in the final application image
+- custom bridge network for inter-service communication
+- named volume for PostgreSQL data persistence
+- health checks for both `app` and `db`
+- restart policies for application and database containers
 
 ## Testing
 
@@ -118,6 +194,36 @@ http://localhost:4000/doc
 ```
 
 The assignment requires OpenAPI documentation at `/doc`.
+
+## Security scan
+
+The application Docker image was scanned with Docker Scout.
+
+Command used:
+
+```bash
+docker scout cves knowledge-hub:latest
+```
+
+Scan result:
+
+- CRITICAL: 0
+- HIGH: 36
+- MEDIUM: 14
+- LOW: 4
+- UNSPECIFIED: 2
+
+No critical vulnerabilities were found in the application image.
+
+## Docker Hub image
+
+Docker Hub image:
+
+```text
+https://hub.docker.com/r/YOUR_DOCKERHUB_USERNAME/knowledge-hub
+```
+
+Replace `YOUR_DOCKERHUB_USERNAME` with your actual Docker Hub username.
 
 ## API overview
 
@@ -334,5 +440,6 @@ test/
 
 ## Notes
 
-- The application currently uses **in-memory data storage**, so data is reset after restart.
-- The architecture is prepared for future migration to a persistent database.
+- The application logic currently uses **in-memory storage**, so domain data is reset after restart.
+- PostgreSQL is prepared as Docker infrastructure for the next assignment stage.
+- PostgreSQL data inside Docker is persisted through a named volume.
