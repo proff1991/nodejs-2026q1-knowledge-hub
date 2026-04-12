@@ -120,6 +120,8 @@ Current scripts are defined in `package.json`.
 
 ## Running with Docker Compose
 
+Before running Docker Compose, make sure you have created a `.env` file based on `.env.example`.
+
 Build and start the application with PostgreSQL:
 
 ```bash
