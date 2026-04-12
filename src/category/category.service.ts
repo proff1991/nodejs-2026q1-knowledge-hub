@@ -1,6 +1,5 @@
-import { randomUUID } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { ArticleService } from '../article/article.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { ListCategoryQueryDto } from './dto/list-category-query.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -15,66 +14,58 @@ type PaginatedCategoryResponse = {
 
 @Injectable()
 export class CategoryService {
-  private readonly categories: Map<string, Category> = new Map();
+  constructor(private readonly prisma: PrismaService) {}
 
-  constructor(private readonly articleService: ArticleService) {}
-
-  create(createCategoryDto: CreateCategoryDto): Category {
-    var category: Category = {
-      id: randomUUID(),
-      name: createCategoryDto.name,
-      description: createCategoryDto.description,
-    };
-
-    this.categories.set(category.id, category);
-
-    return category;
+  async create(createCategoryDto: CreateCategoryDto): Promise<Category> {
+    return this.prisma.category.create({
+      data: {
+        name: createCategoryDto.name,
+        description: createCategoryDto.description,
+      },
+    });
   }
 
-  findAll(query?: ListCategoryQueryDto): Category[] | PaginatedCategoryResponse {
-    var categories = Array.from(this.categories.values());
+  async findAll(query?: ListCategoryQueryDto): Promise<Category[] | PaginatedCategoryResponse> {
     var hasPagination =
       typeof query?.page !== 'undefined' || typeof query?.limit !== 'undefined';
     var hasSorting =
       typeof query?.sortBy !== 'undefined' || typeof query?.order !== 'undefined';
 
-    if (query?.sortBy) {
-      var order = query.order ?? 'asc';
-
-      categories.sort((a, b) => {
-        var left = a[query.sortBy!] ?? '';
-        var right = b[query.sortBy!] ?? '';
-        var result = String(left).localeCompare(String(right));
-
-        if (order === 'desc') {
-          return result * -1;
+    var orderBy = query?.sortBy
+      ? {
+          [query.sortBy]: query.order ?? 'asc',
         }
+      : undefined;
 
-        return result;
+    if (!hasPagination && !hasSorting) {
+      return this.prisma.category.findMany({
+        orderBy,
       });
     }
 
-    if (!hasPagination && !hasSorting) {
-      return categories;
-    }
-
+    var total = await this.prisma.category.count();
     var page = Number(query?.page ?? 1);
-    var limit = Number((query?.limit ?? categories.length) || 1);
-    var total = categories.length;
-    var start = (page - 1) * limit;
-    var end = start + limit;
-    var data = categories.slice(start, end);
+    var limit = Number((query?.limit ?? total) || 1);
+    var skip = (page - 1) * limit;
+
+    var categories = await this.prisma.category.findMany({
+      orderBy,
+      skip,
+      take: limit,
+    });
 
     return {
       total,
       page,
       limit,
-      data,
+      data: categories,
     };
   }
 
-  findOne(id: string): Category {
-    var category = this.categories.get(id);
+  async findOne(id: string): Promise<Category> {
+    var category = await this.prisma.category.findUnique({
+      where: { id },
+    });
 
     if (!category) {
       throw new NotFoundException('Category not found');
@@ -83,34 +74,39 @@ export class CategoryService {
     return category;
   }
 
-  update(id: string, updateCategoryDto: UpdateCategoryDto): Category {
-    var category = this.categories.get(id);
+  async update(id: string, updateCategoryDto: UpdateCategoryDto): Promise<Category> {
+    var category = await this.prisma.category.findUnique({
+      where: { id },
+    });
 
     if (!category) {
       throw new NotFoundException('Category not found');
     }
 
-    if (typeof updateCategoryDto.name !== 'undefined') {
-      category.name = updateCategoryDto.name;
-    }
-
-    if (typeof updateCategoryDto.description !== 'undefined') {
-      category.description = updateCategoryDto.description;
-    }
-
-    this.categories.set(category.id, category);
-
-    return category;
+    return this.prisma.category.update({
+      where: { id },
+      data: {
+        ...(typeof updateCategoryDto.name !== 'undefined'
+          ? { name: updateCategoryDto.name }
+          : {}),
+        ...(typeof updateCategoryDto.description !== 'undefined'
+          ? { description: updateCategoryDto.description }
+          : {}),
+      },
+    });
   }
 
-  remove(id: string): void {
-    var category = this.categories.get(id);
+  async remove(id: string): Promise<void> {
+    var category = await this.prisma.category.findUnique({
+      where: { id },
+    });
 
     if (!category) {
       throw new NotFoundException('Category not found');
     }
 
-    this.articleService.nullifyCategoryId(id);
-    this.categories.delete(id);
+    await this.prisma.category.delete({
+      where: { id },
+    });
   }
 }
