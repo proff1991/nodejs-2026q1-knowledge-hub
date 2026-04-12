@@ -37,12 +37,11 @@ The Docker setup from assignment `06a` is reused for the database and applicatio
   - `categoryId`
   - `tag`
 - Swagger / OpenAPI documentation at `/doc`
-- cascading delete behavior:
+- cascading / nullify behavior:
   - deleting a user sets `authorId = null` in related articles and removes related comments
   - deleting a category sets `categoryId = null` in related articles
-  - deleting an article removes its comments
+  - deleting an article removes related comments
 - seed script runnable via `npx prisma db seed`
-- cascading delete / nullify behavior via Prisma relations
 - article tags handled with `connectOrCreate`
 
 ### Hacker scope
@@ -112,6 +111,12 @@ Inside Docker Compose, the application uses the database host `db`.
 
 ## Running the application locally
 
+Before starting the Nest application locally, start PostgreSQL in Docker:
+
+```bash
+docker-compose up -d db
+```
+
 ### Development mode
 
 ```bash
@@ -170,16 +175,19 @@ npx prisma generate
 ```
 
 Create and apply migrations:
+
 ```bash
 npx prisma migrate dev --name <migration_name>
 ```
 
 Run seed:
+
 ```bash
 npx prisma db seed
 ```
 
 Open Prisma Studio:
+
 ```bash
 npx prisma studio
 ```
@@ -257,11 +265,13 @@ No critical vulnerabilities were found in the application image.
 
 ## Docker Hub image
 
-Docker Hub image:
+Docker Hub repository:
 
 ```text
 https://hub.docker.com/r/proff1991/knowledge-hub
 ```
+
+Use the appropriate image tag for the current assignment version, for example `06b`, if such a tag is published.
 
 ## API overview
 
@@ -469,9 +479,15 @@ src/
   article/
   category/
   comment/
+  generated/
+  prisma/
   user/
   main.ts
   app.module.ts
+prisma/
+  migrations/
+  schema.prisma
+  seed.ts
 test/
   *.e2e.spec.ts
 ```
