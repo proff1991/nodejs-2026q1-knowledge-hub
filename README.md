@@ -220,10 +220,8 @@ No critical vulnerabilities were found in the application image.
 Docker Hub image:
 
 ```text
-https://hub.docker.com/r/YOUR_DOCKERHUB_USERNAME/knowledge-hub
+https://hub.docker.com/r/proff1991/knowledge-hub
 ```
-
-Replace `YOUR_DOCKERHUB_USERNAME` with your actual Docker Hub username.
 
 ## API overview
 
