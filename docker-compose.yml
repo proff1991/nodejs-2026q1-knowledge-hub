@@ -28,10 +28,13 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: knowledge-hub:latest
     container_name: knowledge-hub-app
     restart: on-failure
     env_file:
       - .env
+    environment:
+      NODE_ENV: production
     ports:
       - '4000:4000'
     depends_on:
@@ -58,6 +61,8 @@ services:
     restart: unless-stopped
     profiles:
       - debug
+    environment:
+      ADMINER_DEFAULT_SERVER: db
     ports:
       - '8080:8080'
     depends_on:
@@ -65,7 +70,7 @@ services:
         condition: service_healthy
     networks:
       - knowledge-hub-network
-
+      
 volumes:
   postgres_data:
 
