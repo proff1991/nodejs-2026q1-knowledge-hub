@@ -1,15 +1,13 @@
-import { randomUUID } from 'node:crypto';
 import {
   ForbiddenException
   , Injectable
   , NotFoundException
 } from '@nestjs/common';
-import { ArticleService } from '../article/article.service';
-import { CommentService } from '../comment/comment.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto, UserRole } from './dto/create-user.dto';
 import { ListUserQueryDto } from './dto/list-user-query.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { User, UserResponse } from './entities/user.entity';
+import { UserResponse } from './entities/user.entity';
 
 type PaginatedUserResponse = {
   total: number;
@@ -18,86 +16,96 @@ type PaginatedUserResponse = {
   data: UserResponse[];
 };
 
+type DbUser = {
+  id: string;
+  login: string;
+  password: string;
+  role: 'ADMIN' | 'EDITOR' | 'VIEWER';
+  createdAt: Date;
+  updatedAt: Date;
+};
+
 @Injectable()
 export class UserService {
-  private readonly users: Map<string, User> = new Map();
+  constructor(private readonly prisma: PrismaService) { }
 
-  constructor(
-    private readonly articleService: ArticleService,
-    private readonly commentService: CommentService,
-  ) { }
-
-  private toResponse(user: User): UserResponse {
+  private toResponse(user: DbUser): UserResponse {
     return {
       id: user.id,
       login: user.login,
-      role: user.role,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      role: user.role.toLowerCase() as UserResponse['role'],
+      createdAt: user.createdAt.getTime(),
+      updatedAt: user.updatedAt.getTime(),
     };
   }
 
-  create(createUserDto: CreateUserDto): UserResponse {
-    var now = Date.now();
-    var user: User = {
-      id: randomUUID(),
-      login: createUserDto.login,
-      password: createUserDto.password,
-      role: createUserDto.role ?? UserRole.VIEWER,
-      createdAt: now,
-      updatedAt: now,
-    };
+  private toDbRole(role: UserRole): 'ADMIN' | 'EDITOR' | 'VIEWER' {
+    if (role === UserRole.ADMIN) {
+      return 'ADMIN';
+    }
 
-    this.users.set(user.id, user);
+    if (role === UserRole.EDITOR) {
+      return 'EDITOR';
+    }
+
+    return 'VIEWER';
+  }
+
+  async create(createUserDto: CreateUserDto): Promise<UserResponse> {
+    var user = await this.prisma.user.create({
+      data: {
+        login: createUserDto.login,
+        password: createUserDto.password,
+        role: this.toDbRole(createUserDto.role ?? UserRole.VIEWER),
+      },
+    });
 
     return this.toResponse(user);
   }
 
-  findAll(query?: ListUserQueryDto): UserResponse[] | PaginatedUserResponse {
-    var users = Array.from(this.users.values()).map((user) => this.toResponse(user));
+  async findAll(query?: ListUserQueryDto): Promise<UserResponse[] | PaginatedUserResponse> {
     var hasPagination =
       typeof query?.page !== 'undefined' || typeof query?.limit !== 'undefined';
     var hasSorting =
       typeof query?.sortBy !== 'undefined' || typeof query?.order !== 'undefined';
 
-    if (query?.sortBy) {
-      var order = query.order ?? 'asc';
-
-      users.sort((a, b) => {
-        var left = a[query.sortBy!];
-        var right = b[query.sortBy!];
-
-        if (typeof left === 'number' && typeof right === 'number') {
-          var numericResult = left - right;
-          return order === 'desc' ? numericResult * -1 : numericResult;
-        }
-
-        var stringResult = String(left).localeCompare(String(right));
-        return order === 'desc' ? stringResult * -1 : stringResult;
-      });
-    }
+    var orderBy = query?.sortBy
+      ? {
+        [query.sortBy]: query.order ?? 'asc',
+      }
+      : undefined;
 
     if (!hasPagination && !hasSorting) {
-      return users;
+      var users = await this.prisma.user.findMany({
+        orderBy,
+      });
+
+      return users.map((user) => this.toResponse(user));
     }
 
+    var total = await this.prisma.user.count();
     var page = Number(query?.page ?? 1);
-    var limit = Number((query?.limit ?? users.length) || 1);
-    var total = users.length;
-    var start = (page - 1) * limit;
-    var end = start + limit;
-    var data = users.slice(start, end);
+    var limit = Number((query?.limit ?? total) || 1);
+    var skip = (page - 1) * limit;
+
+    var users = await this.prisma.user.findMany({
+      orderBy,
+      skip,
+      take: limit,
+    });
 
     return {
       total,
       page,
       limit,
-      data,
+      data: users.map((user) => this.toResponse(user)),
     };
   }
 
-  findOne(id: string): UserResponse {
-    var user = this.users.get(id);
+  async findOne(id: string): Promise<UserResponse> {
+    var user = await this.prisma.user.findUnique({
+      where: { id },
+    });
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -106,8 +114,10 @@ export class UserService {
     return this.toResponse(user);
   }
 
-  update(id: string, updateUserDto: UpdateUserDto): UserResponse {
-    var user = this.users.get(id);
+  async update(id: string, updateUserDto: UpdateUserDto): Promise<UserResponse> {
+    var user = await this.prisma.user.findUnique({
+      where: { id },
+    });
 
     if (!user) {
       throw new NotFoundException('User not found');
@@ -117,23 +127,27 @@ export class UserService {
       throw new ForbiddenException('Old password is wrong');
     }
 
-    user.password = updateUserDto.newPassword;
-    user.updatedAt = Date.now();
+    var updatedUser = await this.prisma.user.update({
+      where: { id },
+      data: {
+        password: updateUserDto.newPassword,
+      },
+    });
 
-    this.users.set(user.id, user);
-
-    return this.toResponse(user);
+    return this.toResponse(updatedUser);
   }
 
-  remove(id: string): void {
-    var user = this.users.get(id);
+  async remove(id: string): Promise<void> {
+    var user = await this.prisma.user.findUnique({
+      where: { id },
+    });
 
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    this.articleService.nullifyAuthorId(id);
-    this.commentService.removeByAuthorId(id);
-    this.users.delete(id);
+    await this.prisma.user.delete({
+      where: { id },
+    });
   }
 }
