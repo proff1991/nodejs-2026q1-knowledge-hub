@@ -1,6 +1,6 @@
 # Knowledge Hub API
 
-REST API for a **Knowledge Hub** platform built with **Nest.js** and **TypeScript**.
+REST API for a **Knowledge Hub** platform built with **Nest.js**, **TypeScript**, **PostgreSQL** and **Prisma ORM**.
 
 The application provides CRUD operations for:
 
@@ -11,8 +11,8 @@ The application provides CRUD operations for:
 
 Swagger documentation is available at `/doc`.
 
-At the current stage, the application logic still uses **in-memory storage**.  
-A **PostgreSQL container** is prepared as part of the Docker infrastructure for the next assignment step.
+At the current stage, the application uses a real **PostgreSQL** database through **Prisma ORM**.
+The Docker setup from assignment `06a` is reused for the database and application runtime.
 
 ## Features
 
@@ -24,7 +24,9 @@ A **PostgreSQL container** is prepared as part of the Docker infrastructure for 
 - `CategoryModule`
 - `CommentModule`
 - request validation with DTO classes
-- in-memory data storage
+- Prisma schema with models: `User`, `Article`, `Category`, `Comment`, `Tag`
+- PostgreSQL data storage via Prisma ORM
+- existing API routes preserved after migration from in-memory storage
 - all base e2e tests pass
 
 ### Advanced scope
@@ -39,12 +41,18 @@ A **PostgreSQL container** is prepared as part of the Docker infrastructure for 
   - deleting a user sets `authorId = null` in related articles and removes related comments
   - deleting a category sets `categoryId = null` in related articles
   - deleting an article removes its comments
+- seed script runnable via `npx prisma db seed`
+- cascading delete / nullify behavior via Prisma relations
+- article tags handled with `connectOrCreate`
 
 ### Hacker scope
 
 - pagination for list endpoints
 - sorting for list endpoints
 - additional automated e2e tests
+- indexes for frequently queried database fields
+- connection pooling via PostgreSQL pool adapter
+- N+1 avoidance for article tags via Prisma `include`
 
 ## Tech stack
 
@@ -58,6 +66,8 @@ A **PostgreSQL container** is prepared as part of the Docker infrastructure for 
 - Docker Compose
 - PostgreSQL
 - Adminer (optional, debug profile)
+- Prisma ORM
+- Prisma Client
 
 > According to the assignment, the application should use **Node.js 24.x.x**, minimum **24.10.0**.
 
@@ -93,7 +103,12 @@ POSTGRES_PASSWORD=postgres
 POSTGRES_DB=knowledge_hub
 POSTGRES_HOST=db
 POSTGRES_PORT=5432
+
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/knowledge_hub?schema=public
 ```
+
+For local development with Dockerized PostgreSQL, `DATABASE_URL` uses `localhost`.
+Inside Docker Compose, the application uses the database host `db`.
 
 ## Running the application locally
 
@@ -144,6 +159,29 @@ Run with optional Adminer debug service:
 
 ```bash
 docker-compose --profile debug up --build
+```
+
+## Prisma workflow
+
+Generate Prisma Client:
+
+```bash
+npx prisma generate
+```
+
+Create and apply migrations:
+```bash
+npx prisma migrate dev --name <migration_name>
+```
+
+Run seed:
+```bash
+npx prisma db seed
+```
+
+Open Prisma Studio:
+```bash
+npx prisma studio
 ```
 
 ## Available services
@@ -440,6 +478,7 @@ test/
 
 ## Notes
 
-- The application logic currently uses **in-memory storage**, so domain data is reset after restart.
-- PostgreSQL is prepared as Docker infrastructure for the next assignment stage.
+- The application now uses **PostgreSQL** as the primary data store through **Prisma ORM**.
+- Docker Compose is used to run the PostgreSQL database and the application container.
 - PostgreSQL data inside Docker is persisted through a named volume.
+- Prisma migrations and seed are included in the repository.
