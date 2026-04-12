@@ -77,7 +77,7 @@ export class CommentService {
       : undefined;
 
     if (!hasPagination && !hasSorting) {
-      var comments = await this.prisma.comment.findMany({
+      const comments = await this.prisma.comment.findMany({
         where,
         orderBy,
       });
@@ -90,7 +90,7 @@ export class CommentService {
     var limit = Number((query.limit ?? total) || 1);
     var skip = (page - 1) * limit;
 
-    var comments = await this.prisma.comment.findMany({
+    const comments = await this.prisma.comment.findMany({
       where,
       orderBy,
       skip,

@@ -76,7 +76,7 @@ export class UserService {
       : undefined;
 
     if (!hasPagination && !hasSorting) {
-      var users = await this.prisma.user.findMany({
+      const users = await this.prisma.user.findMany({
         orderBy,
       });
 
@@ -88,7 +88,7 @@ export class UserService {
     var limit = Number((query?.limit ?? total) || 1);
     var skip = (page - 1) * limit;
 
-    var users = await this.prisma.user.findMany({
+    const users = await this.prisma.user.findMany({
       orderBy,
       skip,
       take: limit,

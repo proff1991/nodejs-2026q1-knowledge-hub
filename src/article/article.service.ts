@@ -130,8 +130,9 @@ export class ArticleService {
       }
       : undefined;
 
+
     if (!hasPagination && !hasSorting) {
-      var articles = await this.prisma.article.findMany({
+      const articles = await this.prisma.article.findMany({
         where,
         orderBy,
         include: {
@@ -149,7 +150,7 @@ export class ArticleService {
     var limit = Number((query?.limit ?? total) || 1);
     var skip = (page - 1) * limit;
 
-    var articles = await this.prisma.article.findMany({
+    const articles = await this.prisma.article.findMany({
       where,
       orderBy,
       skip,
