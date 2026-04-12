@@ -1,14 +1,11 @@
-import { randomUUID } from 'node:crypto';
 import {
-  Inject
-  , Injectable
+  Injectable
   , NotFoundException
-  , forwardRef
 } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
 import { Article, ArticleStatus } from './entities/article.entity';
-import { CommentService } from '../comment/comment.service';
 import { ListArticleQueryDto } from './dto/list-article-query.dto';
 
 type PaginatedArticleResponse = {
@@ -18,185 +15,248 @@ type PaginatedArticleResponse = {
   data: Article[];
 };
 
+type DbArticle = {
+  id: string;
+  title: string;
+  content: string;
+  status: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED';
+  authorId: string | null;
+  categoryId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  tags?: Array<{ name: string }>;
+};
+
 @Injectable()
 export class ArticleService {
-  private readonly articles: Map<string, Article> = new Map();
+  constructor(private readonly prisma: PrismaService) { }
 
-  constructor(
-    @Inject(forwardRef(() => CommentService))
-    private readonly commentService: CommentService,
-  ) { }
-
-  create(createArticleDto: CreateArticleDto): Article {
-    var now = Date.now();
-    var article: Article = {
-      id: randomUUID(),
-      title: createArticleDto.title,
-      content: createArticleDto.content,
-      status: createArticleDto.status ?? ArticleStatus.DRAFT,
-      authorId:
-        typeof createArticleDto.authorId === 'undefined'
-          ? null
-          : createArticleDto.authorId,
-      categoryId:
-        typeof createArticleDto.categoryId === 'undefined'
-          ? null
-          : createArticleDto.categoryId,
-      tags: createArticleDto.tags ? [...createArticleDto.tags] : [],
-      createdAt: now,
-      updatedAt: now,
-    };
-
-    this.articles.set(article.id, article);
-
+  private toResponse(article: DbArticle): Article {
     return {
-      ...article,
-      tags: [...article.tags],
+      id: article.id,
+      title: article.title,
+      content: article.content,
+      status: article.status.toLowerCase() as ArticleStatus,
+      authorId: article.authorId,
+      categoryId: article.categoryId,
+      tags: article.tags ? article.tags.map((tag) => tag.name) : [],
+      createdAt: article.createdAt.getTime(),
+      updatedAt: article.updatedAt.getTime(),
     };
   }
 
-  findAll(query?: ListArticleQueryDto): Article[] | PaginatedArticleResponse {
-    var articles = Array.from(this.articles.values()).map((article) => ({
-      ...article,
-      tags: [...article.tags],
+  private toDbStatus(status: ArticleStatus): 'DRAFT' | 'PUBLISHED' | 'ARCHIVED' {
+    if (status === ArticleStatus.PUBLISHED) {
+      return 'PUBLISHED';
+    }
+
+    if (status === ArticleStatus.ARCHIVED) {
+      return 'ARCHIVED';
+    }
+
+    return 'DRAFT';
+  }
+
+  private buildTagConnectOrCreate(tags?: string[]) {
+    if (!tags) {
+      return undefined;
+    }
+
+    return tags.map((tag) => ({
+      where: { name: tag },
+      create: { name: tag },
     }));
+  }
+
+  async create(createArticleDto: CreateArticleDto): Promise<Article> {
+    var article = await this.prisma.article.create({
+      data: {
+        title: createArticleDto.title,
+        content: createArticleDto.content,
+        status: this.toDbStatus(createArticleDto.status ?? ArticleStatus.DRAFT),
+        authorId:
+          typeof createArticleDto.authorId === 'undefined'
+            ? null
+            : createArticleDto.authorId,
+        categoryId:
+          typeof createArticleDto.categoryId === 'undefined'
+            ? null
+            : createArticleDto.categoryId,
+        ...(typeof createArticleDto.tags !== 'undefined'
+          ? {
+            tags: {
+              connectOrCreate: this.buildTagConnectOrCreate(createArticleDto.tags),
+            },
+          }
+          : {}),
+      },
+      include: {
+        tags: {
+          select: { name: true },
+        },
+      },
+    });
+
+    return this.toResponse(article);
+  }
+
+  async findAll(query?: ListArticleQueryDto): Promise<Article[] | PaginatedArticleResponse> {
     var hasPagination =
       typeof query?.page !== 'undefined' || typeof query?.limit !== 'undefined';
     var hasSorting =
       typeof query?.sortBy !== 'undefined' || typeof query?.order !== 'undefined';
 
-    if (typeof query?.status !== 'undefined') {
-      articles = articles.filter((article) => article.status === query.status);
-    }
-
-    if (typeof query?.categoryId !== 'undefined') {
-      articles = articles.filter(
-        (article) => article.categoryId === query.categoryId,
-      );
-    }
-
-    if (typeof query?.tag !== 'undefined') {
-      articles = articles.filter((article) => article.tags.includes(query.tag!));
-    }
-
-    if (query?.sortBy) {
-      var order = query.order ?? 'asc';
-
-      articles.sort((a, b) => {
-        var left = a[query.sortBy!];
-        var right = b[query.sortBy!];
-
-        if (typeof left === 'number' && typeof right === 'number') {
-          var numericResult = left - right;
-          return order === 'desc' ? numericResult * -1 : numericResult;
+    var where = {
+      ...(typeof query?.status !== 'undefined'
+        ? { status: this.toDbStatus(query.status) }
+        : {}),
+      ...(typeof query?.categoryId !== 'undefined'
+        ? { categoryId: query.categoryId }
+        : {}),
+      ...(typeof query?.tag !== 'undefined'
+        ? {
+          tags: {
+            some: {
+              name: query.tag,
+            },
+          },
         }
+        : {}),
+    };
 
-        var stringResult = String(left).localeCompare(String(right));
-        return order === 'desc' ? stringResult * -1 : stringResult;
-      });
-    }
+    var orderBy = query?.sortBy
+      ? {
+        [query.sortBy]: query.order ?? 'asc',
+      }
+      : undefined;
 
     if (!hasPagination && !hasSorting) {
-      return articles;
+      var articles = await this.prisma.article.findMany({
+        where,
+        orderBy,
+        include: {
+          tags: {
+            select: { name: true },
+          },
+        },
+      });
+
+      return articles.map((article) => this.toResponse(article));
     }
 
+    var total = await this.prisma.article.count({ where });
     var page = Number(query?.page ?? 1);
-    var limit = Number((query?.limit ?? articles.length) || 1);
-    var total = articles.length;
-    var start = (page - 1) * limit;
-    var end = start + limit;
-    var data = articles.slice(start, end);
+    var limit = Number((query?.limit ?? total) || 1);
+    var skip = (page - 1) * limit;
+
+    var articles = await this.prisma.article.findMany({
+      where,
+      orderBy,
+      skip,
+      take: limit,
+      include: {
+        tags: {
+          select: { name: true },
+        },
+      },
+    });
 
     return {
       total,
       page,
       limit,
-      data,
+      data: articles.map((article) => this.toResponse(article)),
     };
   }
 
-  findOne(id: string): Article {
-    var article = this.articles.get(id);
+  async findOne(id: string): Promise<Article> {
+    var article = await this.prisma.article.findUnique({
+      where: { id },
+      include: {
+        tags: {
+          select: { name: true },
+        },
+      },
+    });
 
     if (!article) {
       throw new NotFoundException('Article not found');
     }
 
-    return {
-      ...article,
-      tags: [...article.tags],
-    };
+    return this.toResponse(article);
   }
 
-  update(id: string, updateArticleDto: UpdateArticleDto): Article {
-    var article = this.articles.get(id);
+  async update(id: string, updateArticleDto: UpdateArticleDto): Promise<Article> {
+    var article = await this.prisma.article.findUnique({
+      where: { id },
+    });
 
     if (!article) {
       throw new NotFoundException('Article not found');
     }
 
-    if (typeof updateArticleDto.title !== 'undefined') {
-      article.title = updateArticleDto.title;
-    }
+    var updatedArticle = await this.prisma.article.update({
+      where: { id },
+      data: {
+        ...(typeof updateArticleDto.title !== 'undefined'
+          ? { title: updateArticleDto.title }
+          : {}),
+        ...(typeof updateArticleDto.content !== 'undefined'
+          ? { content: updateArticleDto.content }
+          : {}),
+        ...(typeof updateArticleDto.status !== 'undefined'
+          ? { status: this.toDbStatus(updateArticleDto.status) }
+          : {}),
+        ...(typeof updateArticleDto.authorId !== 'undefined'
+          ? { authorId: updateArticleDto.authorId }
+          : {}),
+        ...(typeof updateArticleDto.categoryId !== 'undefined'
+          ? { categoryId: updateArticleDto.categoryId }
+          : {}),
+        ...(typeof updateArticleDto.tags !== 'undefined'
+          ? {
+            tags: {
+              set: [],
+              connectOrCreate: this.buildTagConnectOrCreate(updateArticleDto.tags),
+            },
+          }
+          : {}),
+      },
+      include: {
+        tags: {
+          select: { name: true },
+        },
+      },
+    });
 
-    if (typeof updateArticleDto.content !== 'undefined') {
-      article.content = updateArticleDto.content;
-    }
-
-    if (typeof updateArticleDto.status !== 'undefined') {
-      article.status = updateArticleDto.status;
-    }
-
-    if (typeof updateArticleDto.authorId !== 'undefined') {
-      article.authorId = updateArticleDto.authorId;
-    }
-
-    if (typeof updateArticleDto.categoryId !== 'undefined') {
-      article.categoryId = updateArticleDto.categoryId;
-    }
-
-    if (typeof updateArticleDto.tags !== 'undefined') {
-      article.tags = [...updateArticleDto.tags];
-    }
-
-    article.updatedAt = Date.now();
-
-    this.articles.set(article.id, article);
-
-    return {
-      ...article,
-      tags: [...article.tags],
-    };
+    return this.toResponse(updatedArticle);
   }
 
-  nullifyCategoryId(categoryId: string): void {
-    for (var article of this.articles.values()) {
-      if (article.categoryId === categoryId) {
-        article.categoryId = null;
-        article.updatedAt = Date.now();
-        this.articles.set(article.id, article);
-      }
-    }
+  async nullifyCategoryId(categoryId: string): Promise<void> {
+    await this.prisma.article.updateMany({
+      where: { categoryId },
+      data: { categoryId: null },
+    });
   }
 
-  nullifyAuthorId(authorId: string): void {
-    for (var article of this.articles.values()) {
-      if (article.authorId === authorId) {
-        article.authorId = null;
-        article.updatedAt = Date.now();
-        this.articles.set(article.id, article);
-      }
-    }
+  async nullifyAuthorId(authorId: string): Promise<void> {
+    await this.prisma.article.updateMany({
+      where: { authorId },
+      data: { authorId: null },
+    });
   }
 
-  remove(id: string): void {
-    var article = this.articles.get(id);
+  async remove(id: string): Promise<void> {
+    var article = await this.prisma.article.findUnique({
+      where: { id },
+    });
 
     if (!article) {
       throw new NotFoundException('Article not found');
     }
 
-    this.commentService.removeByArticleId(id);
-    this.articles.delete(id);
+    await this.prisma.article.delete({
+      where: { id },
+    });
   }
 }
