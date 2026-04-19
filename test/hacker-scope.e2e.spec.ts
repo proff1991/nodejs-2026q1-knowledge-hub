@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import {
   afterAll,
   beforeAll,
@@ -7,8 +8,11 @@ import {
 } from '@jest/globals';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
 import request = require('supertest');
 import { AppModule } from '../src/app.module';
+import { PrismaClient } from '../src/generated/prisma/client';
 import { SEED_ADMIN_LOGIN, SEED_ADMIN_PASSWORD } from './setup/seedAdmin';
 
 describe('Hacker scope additional e2e tests', () => {
@@ -16,6 +20,8 @@ describe('Hacker scope additional e2e tests', () => {
   var server: any;
   var adminToken: string;
   var runId: string;
+  var pool: Pool;
+  var prisma: PrismaClient;
 
   beforeAll(async () => {
     var moduleRef = await Test.createTestingModule({
@@ -36,6 +42,47 @@ describe('Hacker scope additional e2e tests', () => {
     server = app.getHttpServer();
     runId = Date.now().toString();
 
+    var connectionString = process.env.DATABASE_URL;
+
+    if (!connectionString) {
+      throw new Error('DATABASE_URL is not defined');
+    }
+
+    pool = new Pool({ connectionString });
+    var adapter = new PrismaPg(pool);
+    prisma = new PrismaClient({ adapter });
+
+    await prisma.comment.deleteMany({
+      where: {
+        OR: [
+          { content: 'Alpha comment' },
+          { content: 'Beta comment' },
+          { content: 'Gamma comment' },
+        ],
+      },
+    });
+
+    await prisma.article.deleteMany({
+      where: {
+        OR: [
+          { title: { startsWith: '!!!' } },
+          { title: { startsWith: 'Comments article ' } },
+        ],
+      },
+    });
+
+    await prisma.category.deleteMany({
+      where: {
+        name: { startsWith: '!!!' },
+      },
+    });
+
+    await prisma.user.deleteMany({
+      where: {
+        login: { startsWith: '000_' },
+      },
+    });
+
     var loginResponse = await request(server)
       .post('/auth/login')
       .send({
@@ -48,6 +95,8 @@ describe('Hacker scope additional e2e tests', () => {
   });
 
   afterAll(async () => {
+    await prisma.$disconnect();
+    await pool.end();
     await app.close();
   });
 
