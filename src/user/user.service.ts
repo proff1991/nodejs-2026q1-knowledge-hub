@@ -136,14 +136,6 @@ export class UserService {
   }
 
   async update(id: string, updateUserDto: UpdateUserDto): Promise<UserResponse> {
-    var user = await this.prisma.user.findUnique({
-      where: { id },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
     var data: {
       password?: string;
       role?: 'ADMIN' | 'EDITOR' | 'VIEWER';
@@ -154,15 +146,27 @@ export class UserService {
     var hasNewPassword = typeof updateUserDto.newPassword !== 'undefined';
     var hasPasswordUpdate = hasOldPassword || hasNewPassword;
 
+    if (!hasRoleUpdate && !hasPasswordUpdate) {
+      throw new BadRequestException('Nothing to update');
+    }
+
+    if (hasPasswordUpdate && (!hasOldPassword || !hasNewPassword)) {
+      throw new BadRequestException('oldPassword and newPassword are required');
+    }
+
+    var user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
     if (hasRoleUpdate) {
       data.role = this.toDbRole(updateUserDto.role as UserRole);
     }
 
     if (hasPasswordUpdate) {
-      if (!hasOldPassword || !hasNewPassword) {
-        throw new BadRequestException('oldPassword and newPassword are required');
-      }
-
       var isPasswordCorrect = await bcrypt.compare(
         updateUserDto.oldPassword as string,
         user.password,
@@ -176,10 +180,6 @@ export class UserService {
         updateUserDto.newPassword as string,
         this.getSaltRounds(),
       );
-    }
-
-    if (!hasRoleUpdate && !hasPasswordUpdate) {
-      throw new BadRequestException('Nothing to update');
     }
 
     var updatedUser = await this.prisma.user.update({

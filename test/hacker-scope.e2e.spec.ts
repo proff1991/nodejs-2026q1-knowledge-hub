@@ -15,6 +15,7 @@ describe('Hacker scope additional e2e tests', () => {
   var app: INestApplication;
   var server: any;
   var adminToken: string;
+  var runId: string;
 
   beforeAll(async () => {
     var moduleRef = await Test.createTestingModule({
@@ -33,6 +34,7 @@ describe('Hacker scope additional e2e tests', () => {
 
     await app.init();
     server = app.getHttpServer();
+    runId = Date.now().toString();
 
     var loginResponse = await request(server)
       .post('/auth/login')
@@ -50,11 +52,28 @@ describe('Hacker scope additional e2e tests', () => {
   });
 
   it('GET /category should support pagination and sorting', async () => {
+    var beforeResponse = await request(server)
+      .get('/category')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({
+        page: 1,
+        limit: 100,
+        sortBy: 'name',
+        order: 'asc',
+      })
+      .expect(200);
+
+    var totalBefore = beforeResponse.body.total;
+
+    var alphaName = `!!!${runId}-Alpha`;
+    var betaName = `!!!${runId}-Beta`;
+    var gammaName = `!!!${runId}-Gamma`;
+
     await request(server)
       .post('/category')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        name: 'Gamma',
+        name: gammaName,
         description: 'Gamma category',
       })
       .expect(201);
@@ -63,7 +82,7 @@ describe('Hacker scope additional e2e tests', () => {
       .post('/category')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        name: 'Alpha',
+        name: alphaName,
         description: 'Alpha category',
       })
       .expect(201);
@@ -72,7 +91,7 @@ describe('Hacker scope additional e2e tests', () => {
       .post('/category')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        name: 'Beta',
+        name: betaName,
         description: 'Beta category',
       })
       .expect(201);
@@ -88,20 +107,37 @@ describe('Hacker scope additional e2e tests', () => {
       })
       .expect(200);
 
-    expect(response.body.total).toBe(3);
+    expect(response.body.total).toBe(totalBefore + 3);
     expect(response.body.page).toBe(1);
     expect(response.body.limit).toBe(2);
     expect(response.body.data).toHaveLength(2);
-    expect(response.body.data[0].name).toBe('Alpha');
-    expect(response.body.data[1].name).toBe('Beta');
+    expect(response.body.data[0].name).toBe(alphaName);
+    expect(response.body.data[1].name).toBe(betaName);
   });
 
   it('GET /user should support pagination and sorting without returning passwords', async () => {
+    var beforeResponse = await request(server)
+      .get('/user')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({
+        page: 1,
+        limit: 100,
+        sortBy: 'login',
+        order: 'asc',
+      })
+      .expect(200);
+
+    var totalBefore = beforeResponse.body.total;
+
+    var alphaLogin = `000_${runId}_alpha`;
+    var bravoLogin = `000_${runId}_bravo`;
+    var charlieLogin = `000_${runId}_charlie`;
+
     await request(server)
       .post('/user')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        login: 'charlie',
+        login: charlieLogin,
         password: 'pass-charlie',
       })
       .expect(201);
@@ -110,7 +146,7 @@ describe('Hacker scope additional e2e tests', () => {
       .post('/user')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        login: 'alpha',
+        login: alphaLogin,
         password: 'pass-alpha',
       })
       .expect(201);
@@ -119,7 +155,7 @@ describe('Hacker scope additional e2e tests', () => {
       .post('/user')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        login: 'bravo',
+        login: bravoLogin,
         password: 'pass-bravo',
       })
       .expect(201);
@@ -135,22 +171,39 @@ describe('Hacker scope additional e2e tests', () => {
       })
       .expect(200);
 
-    expect(response.body.total).toBe(3);
+    expect(response.body.total).toBe(totalBefore + 3);
     expect(response.body.page).toBe(1);
     expect(response.body.limit).toBe(2);
     expect(response.body.data).toHaveLength(2);
-    expect(response.body.data[0].login).toBe('alpha');
-    expect(response.body.data[1].login).toBe('bravo');
+    expect(response.body.data[0].login).toBe(alphaLogin);
+    expect(response.body.data[1].login).toBe(bravoLogin);
     expect(response.body.data[0].password).toBeUndefined();
     expect(response.body.data[1].password).toBeUndefined();
   });
 
   it('GET /article should support filtering, pagination and sorting', async () => {
+    var beforeResponse = await request(server)
+      .get('/article')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .query({
+        status: 'draft',
+        page: 1,
+        limit: 100,
+        sortBy: 'title',
+        order: 'asc',
+      })
+      .expect(200);
+
+    var totalBefore = beforeResponse.body.total;
+
+    var alphaTitle = `!!!${runId}-Alpha draft`;
+    var gammaTitle = `!!!${runId}-Gamma draft`;
+
     await request(server)
       .post('/article')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        title: 'Gamma draft',
+        title: gammaTitle,
         content: 'Gamma content',
         status: 'draft',
         tags: ['nodejs'],
@@ -161,7 +214,7 @@ describe('Hacker scope additional e2e tests', () => {
       .post('/article')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        title: 'Alpha draft',
+        title: alphaTitle,
         content: 'Alpha content',
         status: 'draft',
         tags: ['nodejs'],
@@ -172,7 +225,7 @@ describe('Hacker scope additional e2e tests', () => {
       .post('/article')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        title: 'Beta published',
+        title: `!!!${runId}-Beta published`,
         content: 'Beta content',
         status: 'published',
         tags: ['nestjs'],
@@ -191,12 +244,12 @@ describe('Hacker scope additional e2e tests', () => {
       })
       .expect(200);
 
-    expect(response.body.total).toBe(2);
+    expect(response.body.total).toBe(totalBefore + 2);
     expect(response.body.page).toBe(1);
     expect(response.body.limit).toBe(2);
     expect(response.body.data).toHaveLength(2);
-    expect(response.body.data[0].title).toBe('Alpha draft');
-    expect(response.body.data[1].title).toBe('Gamma draft');
+    expect(response.body.data[0].title).toBe(alphaTitle);
+    expect(response.body.data[1].title).toBe(gammaTitle);
     expect(response.body.data[0].status).toBe('draft');
     expect(response.body.data[1].status).toBe('draft');
   });
@@ -206,7 +259,7 @@ describe('Hacker scope additional e2e tests', () => {
       .post('/article')
       .set('Authorization', `Bearer ${adminToken}`)
       .send({
-        title: 'Comments article',
+        title: `Comments article ${runId}`,
         content: 'Comments content',
       })
       .expect(201);
