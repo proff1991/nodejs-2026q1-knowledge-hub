@@ -15,6 +15,14 @@ type AuthData = {
 
 type DbRole = 'ADMIN' | 'EDITOR' | 'VIEWER';
 
+type TokenPayload = {
+  userId: string;
+  login: string;
+  role: 'admin' | 'editor' | 'viewer';
+  iat?: number;
+  exp?: number;
+};
+
 const getAccessSecret = (): string => {
   return process.env.JWT_SECRET || process.env.JWT_SECRET_KEY || '';
 };
@@ -69,7 +77,7 @@ const getTokenAndUserId = async (_request?: unknown): Promise<AuthData> => {
 
     const jwtService = new JwtService();
 
-    const payload = {
+    const payload: TokenPayload = {
       userId: user.id,
       login: user.login,
       role: 'admin',
@@ -83,6 +91,25 @@ const getTokenAndUserId = async (_request?: unknown): Promise<AuthData> => {
     const refreshToken = await jwtService.signAsync(payload, {
       secret: getRefreshSecret(),
       expiresIn: getRefreshTtl(),
+    });
+
+    const verifiedRefreshPayload = await jwtService.verifyAsync<TokenPayload>(refreshToken, {
+      secret: getRefreshSecret(),
+    });
+
+    if (!verifiedRefreshPayload.exp) {
+      throw new Error('Failed to determine refresh token expiration');
+    }
+
+    const refreshTokenHash = await bcrypt.hash(refreshToken, getSaltRounds());
+    const expiresAt = new Date(verifiedRefreshPayload.exp * 1000);
+
+    await prisma.refreshToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: refreshTokenHash,
+        expiresAt,
+      },
     });
 
     return {

@@ -1,50 +1,97 @@
-import { authRoutes } from '../endpoints';
-import promoteUserRole from './promoteUserRole';
+import 'dotenv/config';
+import * as bcrypt from 'bcrypt';
+import { JwtService } from '@nestjs/jwt';
+import { Pool } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '../../src/generated/prisma/client';
 
-const getUserTokenByRole = async (
-  request,
-  role: 'admin' | 'editor' | 'viewer',
-  // kept for signature compatibility with existing RBAC specs; unused now
-  // because role promotion happens directly via Prisma
-  _adminHeaders?: Record<string, string>,
-) => {
-  const login = `TEST_RBAC_${role.toUpperCase()}_${Date.now()}`;
-  const password = 'TestPass123!';
+type Role = 'admin' | 'editor' | 'viewer';
+type DbRole = 'ADMIN' | 'EDITOR' | 'VIEWER';
 
-  // Create user via signup (defaults to viewer)
-  const signupResponse = await request
-    .post(authRoutes.signup)
-    .set({ Accept: 'application/json' })
-    .send({ login, password });
+const getAccessSecret = (): string => {
+  return process.env.JWT_SECRET || process.env.JWT_SECRET_KEY || '';
+};
 
-  const { id: userId } = signupResponse.body;
+const getAccessTtl = (): string => {
+  return process.env.JWT_ACCESS_TTL || process.env.TOKEN_EXPIRE_TIME || '15m';
+};
 
-  if (!userId) {
-    throw new Error(`Failed to create ${role} user`);
+const getSaltRounds = (): number => {
+  return Number(process.env.CRYPT_SALT ?? 10);
+};
+
+const toDbRole = (role: Role): DbRole => {
+  if (role === 'admin') {
+    return 'ADMIN';
   }
 
-  if (role !== 'viewer') {
-    await promoteUserRole(userId, role);
+  if (role === 'editor') {
+    return 'EDITOR';
   }
 
-  // Login AFTER promotion so JWT payload carries the correct role
-  const loginResponse = await request
-    .post(authRoutes.login)
-    .set({ Accept: 'application/json' })
-    .send({ login, password });
+  return 'VIEWER';
+};
 
-  const { accessToken } = loginResponse.body;
+const createPrisma = () => {
+  const connectionString = process.env.DATABASE_URL;
 
-  if (!accessToken) {
-    throw new Error(`Failed to login as ${role} user`);
+  if (!connectionString) {
+    throw new Error('DATABASE_URL is not defined');
   }
+
+  const pool = new Pool({ connectionString });
+  const adapter = new PrismaPg(pool);
+  const prisma = new PrismaClient({ adapter });
 
   return {
-    token: `Bearer ${accessToken}`,
-    userId,
-    login,
-    role,
+    pool,
+    prisma,
   };
+};
+
+const getUserTokenByRole = async (
+  _request: unknown,
+  role: Role,
+  _adminHeaders?: Record<string, string>,
+) => {
+  const { pool, prisma } = createPrisma();
+
+  try {
+    const login = `TEST_RBAC_${role.toUpperCase()}_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+    const passwordHash = await bcrypt.hash('TestPass123!', getSaltRounds());
+
+    const user = await prisma.user.create({
+      data: {
+        login,
+        password: passwordHash,
+        role: toDbRole(role),
+      },
+    });
+
+    const jwtService = new JwtService();
+
+    const accessToken = await jwtService.signAsync(
+      {
+        userId: user.id,
+        login: user.login,
+        role,
+      },
+      {
+        secret: getAccessSecret(),
+        expiresIn: getAccessTtl(),
+      },
+    );
+
+    return {
+      token: `Bearer ${accessToken}`,
+      userId: user.id,
+      login: user.login,
+      role,
+    };
+  } finally {
+    await prisma.$disconnect();
+    await pool.end();
+  }
 };
 
 export default getUserTokenByRole;
