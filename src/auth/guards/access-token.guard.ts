@@ -31,7 +31,22 @@ export class AccessTokenGuard implements CanActivate {
         return process.env.JWT_SECRET || process.env.JWT_SECRET_KEY || '';
     }
 
+    private isSwaggerPath(pathname: string): boolean {
+        return (
+            pathname === '/doc' ||
+            pathname.startsWith('/doc/') ||
+            pathname.startsWith('/doc-')
+        );
+    }
+
     async canActivate(context: ExecutionContext): Promise<boolean> {
+        const request = context.switchToHttp().getRequest<RequestWithUser>();
+        const pathname = request.path ?? request.originalUrl ?? '';
+
+        if (this.isSwaggerPath(pathname)) {
+            return true;
+        }
+
         const isPublic = this.reflector.getAllAndOverride<boolean>(
             IS_PUBLIC_KEY,
             [
@@ -44,7 +59,6 @@ export class AccessTokenGuard implements CanActivate {
             return true;
         }
 
-        const request = context.switchToHttp().getRequest<RequestWithUser>();
         const authorizationHeader = request.headers.authorization;
 
         if (!authorizationHeader || typeof authorizationHeader !== 'string') {

@@ -1,6 +1,7 @@
 import "dotenv/config";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
+import * as bcrypt from "bcrypt";
 import { PrismaClient } from "../src/generated/prisma/client.js";
 
 var connectionString = process.env.DATABASE_URL;
@@ -20,10 +21,14 @@ var main = async () => {
     await prisma.user.deleteMany();
     await prisma.tag.deleteMany();
 
+    var saltRounds = Number(process.env.CRYPT_SALT ?? 10);
+    var adminPasswordHash = await bcrypt.hash("admin123", saltRounds);
+    var editorPasswordHash = await bcrypt.hash("editor123", saltRounds);
+
     var admin = await prisma.user.create({
         data: {
             login: "admin",
-            password: "admin123",
+            password: adminPasswordHash,
             role: "ADMIN",
         },
     });
@@ -31,7 +36,7 @@ var main = async () => {
     var editor = await prisma.user.create({
         data: {
             login: "editor",
-            password: "editor123",
+            password: editorPasswordHash,
             role: "EDITOR",
         },
     });
