@@ -84,7 +84,11 @@ Passwords are stored in the database as **hashes**.
 
 ## Environment variables
 
-Create a local `.env` file based on `.env.example`.
+You can use `.env.example` as a template:
+
+```bash
+cp .env.example .env
+```
 
 Example:
 
@@ -333,9 +337,3 @@ Swagger UI is available after startup at:
 ```text
 http://localhost:4000/doc
 ```
-
-## Notes
-
-- `.env` must not be committed to the repository
-- `.env.example` is committed as a ready-to-use template
-- for local review, `.env` may be included only in a private archive, but not in Git
