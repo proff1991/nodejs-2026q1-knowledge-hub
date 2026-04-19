@@ -1,8 +1,10 @@
 import {
-  ForbiddenException
+  BadRequestException
+  , ForbiddenException
   , Injectable
   , NotFoundException
 } from '@nestjs/common';
+import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto, UserRole } from './dto/create-user.dto';
 import { ListUserQueryDto } from './dto/list-user-query.dto';
@@ -51,11 +53,30 @@ export class UserService {
     return 'VIEWER';
   }
 
+  private getSaltRounds(): number {
+    return Number(process.env.CRYPT_SALT ?? 10);
+  }
+
   async create(createUserDto: CreateUserDto): Promise<UserResponse> {
+    var existingUser = await this.prisma.user.findFirst({
+      where: {
+        login: createUserDto.login,
+      },
+    });
+
+    if (existingUser) {
+      throw new BadRequestException('Login is already taken');
+    }
+
+    var hashedPassword = await bcrypt.hash(
+      createUserDto.password,
+      this.getSaltRounds(),
+    );
+
     var user = await this.prisma.user.create({
       data: {
         login: createUserDto.login,
-        password: createUserDto.password,
+        password: hashedPassword,
         role: this.toDbRole(createUserDto.role ?? UserRole.VIEWER),
       },
     });
@@ -123,15 +144,47 @@ export class UserService {
       throw new NotFoundException('User not found');
     }
 
-    if (user.password !== updateUserDto.oldPassword) {
-      throw new ForbiddenException('Old password is wrong');
+    var data: {
+      password?: string;
+      role?: 'ADMIN' | 'EDITOR' | 'VIEWER';
+    } = {};
+
+    var hasRoleUpdate = typeof updateUserDto.role !== 'undefined';
+    var hasOldPassword = typeof updateUserDto.oldPassword !== 'undefined';
+    var hasNewPassword = typeof updateUserDto.newPassword !== 'undefined';
+    var hasPasswordUpdate = hasOldPassword || hasNewPassword;
+
+    if (hasRoleUpdate) {
+      data.role = this.toDbRole(updateUserDto.role as UserRole);
+    }
+
+    if (hasPasswordUpdate) {
+      if (!hasOldPassword || !hasNewPassword) {
+        throw new BadRequestException('oldPassword and newPassword are required');
+      }
+
+      var isPasswordCorrect = await bcrypt.compare(
+        updateUserDto.oldPassword as string,
+        user.password,
+      );
+
+      if (!isPasswordCorrect) {
+        throw new ForbiddenException('Old password is wrong');
+      }
+
+      data.password = await bcrypt.hash(
+        updateUserDto.newPassword as string,
+        this.getSaltRounds(),
+      );
+    }
+
+    if (!hasRoleUpdate && !hasPasswordUpdate) {
+      throw new BadRequestException('Nothing to update');
     }
 
     var updatedUser = await this.prisma.user.update({
       where: { id },
-      data: {
-        password: updateUserDto.newPassword,
-      },
+      data,
     });
 
     return this.toResponse(updatedUser);
