@@ -19,6 +19,20 @@ enum ArticleStatus {
   ARCHIVED
 }
 
+model RefreshToken {
+  id         String   @id @default(uuid())
+  tokenHash  String
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime @default(now())
+
+  userId String
+  user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
 model User {
   id        String   @id @default(uuid())
   login     String   @unique
@@ -27,8 +41,9 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  articles Article[]
-  comments Comment[]
+  articles      Article[]
+  comments      Comment[]
+  refreshTokens RefreshToken[]
 }
 
 model Category {

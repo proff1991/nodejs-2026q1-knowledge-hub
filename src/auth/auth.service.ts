@@ -25,6 +25,8 @@ type TokenPayload = {
     userId: string;
     login: string;
     role: UserRole;
+    iat?: number;
+    exp?: number;
 };
 
 type TokensResponse = {
@@ -137,7 +139,10 @@ export class AuthService {
             throw new ForbiddenException('Authentication failed');
         }
 
-        return this.generateTokens(user);
+        const tokens = await this.generateTokens(user as DbUser);
+        await this.storeRefreshToken(user.id, tokens.refreshToken);
+
+        return tokens;
     }
 
     async refresh(body: { refreshToken?: string }): Promise<TokensResponse> {
@@ -165,6 +170,109 @@ export class AuthService {
             throw new ForbiddenException('Invalid refresh token');
         }
 
-        return this.generateTokens(user as DbUser);
+        const storedToken = await this.findStoredRefreshToken(user.id, body.refreshToken);
+
+        if (!storedToken) {
+            throw new ForbiddenException('Invalid refresh token');
+        }
+
+        await this.revokeRefreshToken(storedToken.id);
+
+        const tokens = await this.generateTokens(user as DbUser);
+        await this.storeRefreshToken(user.id, tokens.refreshToken);
+
+        return tokens;
     }
+
+    private async hashToken(token: string): Promise<string> {
+        return bcrypt.hash(token, this.getSaltRounds());
+    }
+
+    private async findStoredRefreshToken(userId: string, refreshToken: string) {
+        const tokens = await this.prisma.refreshToken.findMany({
+            where: {
+                userId,
+                revokedAt: null,
+                expiresAt: {
+                    gt: new Date(),
+                },
+            },
+            orderBy: {
+                createdAt: 'desc',
+            },
+        });
+
+        for (const tokenRecord of tokens) {
+            const matches = await bcrypt.compare(refreshToken, tokenRecord.tokenHash);
+
+            if (matches) {
+                return tokenRecord;
+            }
+        }
+
+        return null;
+    }
+
+    private async storeRefreshToken(userId: string, refreshToken: string): Promise<void> {
+        const payload = await this.jwtService.verifyAsync<TokenPayload>(refreshToken, {
+            secret: this.getRefreshSecret(),
+        });
+
+
+        if (!payload.exp) {
+            throw new ForbiddenException('Invalid refresh token');
+        }
+        const tokenHash = await this.hashToken(refreshToken);
+        const expiresAt = new Date(payload.exp * 1000);
+
+        await this.prisma.refreshToken.create({
+            data: {
+                userId,
+                tokenHash,
+                expiresAt,
+            },
+        });
+    }
+
+    private async revokeRefreshToken(id: string): Promise<void> {
+        await this.prisma.refreshToken.update({
+            where: { id },
+            data: {
+                revokedAt: new Date(),
+            },
+        });
+    }
+
+    private getSaltRounds(): number {
+        return Number(process.env.CRYPT_SALT ?? 10);
+    }
+
+    async logout(body: { refreshToken?: string }): Promise<{ message: string }> {
+        if (!body || typeof body.refreshToken !== 'string' || body.refreshToken.length === 0) {
+            throw new UnauthorizedException('Refresh token is required');
+        }
+
+        let payload: TokenPayload;
+
+        try {
+            payload = await this.jwtService.verifyAsync<TokenPayload>(body.refreshToken, {
+                secret: this.getRefreshSecret(),
+            });
+        } catch {
+            throw new ForbiddenException('Invalid refresh token');
+        }
+
+        const storedToken = await this.findStoredRefreshToken(payload.userId, body.refreshToken);
+
+        if (!storedToken) {
+            throw new ForbiddenException('Invalid refresh token');
+        }
+
+        await this.revokeRefreshToken(storedToken.id);
+
+        return {
+            message: 'Logged out successfully',
+        };
+    }
+
 }
