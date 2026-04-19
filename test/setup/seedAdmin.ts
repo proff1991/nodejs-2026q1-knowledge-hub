@@ -8,19 +8,19 @@ export const SEED_ADMIN_LOGIN = 'TEST_SEED_ADMIN';
 export const SEED_ADMIN_PASSWORD = 'TestSeedAdmin123!';
 
 export default async function globalSetup(): Promise<void> {
-  const connectionString = process.env.DATABASE_URL;
+  var connectionString = process.env.DATABASE_URL;
 
   if (!connectionString) {
     throw new Error('DATABASE_URL is not defined');
   }
 
-  const pool = new Pool({ connectionString });
-  const adapter = new PrismaPg(pool);
-  const prisma = new PrismaClient({ adapter });
-
-  const hashedPassword = await bcrypt.hash(SEED_ADMIN_PASSWORD, 10);
+  var pool = new Pool({ connectionString });
+  var adapter = new PrismaPg(pool);
+  var prisma = new PrismaClient({ adapter });
 
   try {
+    var hashedPassword = await bcrypt.hash(SEED_ADMIN_PASSWORD, 10);
+
     await prisma.user.upsert({
       where: { login: SEED_ADMIN_LOGIN },
       update: {
