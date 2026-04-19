@@ -2,6 +2,7 @@ import {
     BadRequestException
     , ForbiddenException
     , Injectable
+    , UnauthorizedException
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
@@ -137,5 +138,33 @@ export class AuthService {
         }
 
         return this.generateTokens(user);
+    }
+
+    async refresh(body: { refreshToken?: string }): Promise<TokensResponse> {
+        if (!body || typeof body.refreshToken !== 'string' || body.refreshToken.length === 0) {
+            throw new UnauthorizedException('Refresh token is required');
+        }
+
+        let payload: TokenPayload;
+
+        try {
+            payload = await this.jwtService.verifyAsync<TokenPayload>(body.refreshToken, {
+                secret: this.getRefreshSecret(),
+            });
+        } catch {
+            throw new ForbiddenException('Invalid refresh token');
+        }
+
+        const user = await this.prisma.user.findUnique({
+            where: {
+                id: payload.userId,
+            },
+        });
+
+        if (!user || user.login !== payload.login) {
+            throw new ForbiddenException('Invalid refresh token');
+        }
+
+        return this.generateTokens(user as DbUser);
     }
 }
