@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../src/generated/prisma/client';
+import type { StringValue } from 'ms';
 
 type Role = 'admin' | 'editor' | 'viewer';
 type DbRole = 'ADMIN' | 'EDITOR' | 'VIEWER';
@@ -12,8 +13,10 @@ const getAccessSecret = (): string => {
   return process.env.JWT_SECRET || process.env.JWT_SECRET_KEY || '';
 };
 
-const getAccessTtl = (): string => {
-  return process.env.JWT_ACCESS_TTL || process.env.TOKEN_EXPIRE_TIME || '15m';
+const getAccessTtl = (): StringValue | number => {
+  return (process.env.JWT_ACCESS_TTL ||
+    process.env.TOKEN_EXPIRE_TIME ||
+    '15m') as StringValue;
 };
 
 const getSaltRounds = (): number => {

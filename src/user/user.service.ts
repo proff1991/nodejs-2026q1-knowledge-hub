@@ -191,27 +191,25 @@ export class UserService {
   }
 
   async remove(id: string): Promise<void> {
-    await this.prisma.$transaction(async (tx) => {
-      var user = await tx.user.findUnique({
-        where: { id },
-      });
+    var user = await this.prisma.user.findUnique({
+      where: { id },
+    });
 
-      if (!user) {
-        throw new NotFoundException('User not found');
-      }
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
 
-      await tx.article.updateMany({
+    await this.prisma.$transaction([
+      this.prisma.article.updateMany({
         where: { authorId: id },
         data: { authorId: null },
-      });
-
-      await tx.comment.deleteMany({
+      }),
+      this.prisma.comment.deleteMany({
         where: { authorId: id },
-      });
-
-      await tx.user.delete({
+      }),
+      this.prisma.user.delete({
         where: { id },
-      });
-    });
+      }),
+    ]);
   }
 }

@@ -4,6 +4,7 @@ import { JwtService } from '@nestjs/jwt';
 import { Pool } from 'pg';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from '../../src/generated/prisma/client';
+import type { StringValue } from 'ms';
 
 type AuthData = {
   token: string;
@@ -31,12 +32,16 @@ const getRefreshSecret = (): string => {
   return process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET_REFRESH_KEY || '';
 };
 
-const getAccessTtl = (): string => {
-  return process.env.JWT_ACCESS_TTL || process.env.TOKEN_EXPIRE_TIME || '15m';
+const getAccessTtl = (): StringValue | number => {
+  return (process.env.JWT_ACCESS_TTL ||
+    process.env.TOKEN_EXPIRE_TIME ||
+    '15m') as StringValue;
 };
 
-const getRefreshTtl = (): string => {
-  return process.env.JWT_REFRESH_TTL || process.env.TOKEN_REFRESH_EXPIRE_TIME || '7d';
+const getRefreshTtl = (): StringValue | number => {
+  return (process.env.JWT_REFRESH_TTL ||
+    process.env.TOKEN_REFRESH_EXPIRE_TIME ||
+    '7d') as StringValue;
 };
 
 const getSaltRounds = (): number => {

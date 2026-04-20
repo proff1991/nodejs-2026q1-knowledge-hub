@@ -11,6 +11,7 @@ import { UserRole } from '../user/dto/create-user.dto';
 import { UserResponse } from '../user/entities/user.entity';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/signup.dto';
+import type { StringValue } from 'ms';
 
 type DbUser = {
     id: string;
@@ -59,14 +60,17 @@ export class AuthService {
         return process.env.JWT_REFRESH_SECRET || process.env.JWT_SECRET_REFRESH_KEY || '';
     }
 
-    private getAccessTtl(): string {
-        return process.env.JWT_ACCESS_TTL || process.env.TOKEN_EXPIRE_TIME || '15m';
+    private getAccessTtl(): StringValue | number {
+        return (process.env.JWT_ACCESS_TTL ||
+            process.env.TOKEN_EXPIRE_TIME ||
+            '15m') as StringValue;
     }
 
-    private getRefreshTtl(): string {
-        return process.env.JWT_REFRESH_TTL || process.env.TOKEN_REFRESH_EXPIRE_TIME || '7d';
+    private getRefreshTtl(): StringValue | number {
+        return (process.env.JWT_REFRESH_TTL ||
+            process.env.TOKEN_REFRESH_EXPIRE_TIME ||
+            '7d') as StringValue;
     }
-
     private createTokenPayload(user: DbUser): TokenPayload {
         return {
             userId: user.id,
@@ -76,7 +80,7 @@ export class AuthService {
     }
 
     private async generateTokens(user: DbUser): Promise<TokensResponse> {
-        const payload = this.createTokenPayload(user);
+        const payload: TokenPayload = this.createTokenPayload(user);
 
         const accessToken = await this.jwtService.signAsync(payload, {
             secret: this.getAccessSecret(),
