@@ -25,6 +25,14 @@ var bootstrap = async (): Promise<void> => {
     .setTitle('Knowledge Hub API')
     .setDescription('REST API for the Knowledge Hub platform')
     .setVersion('1.0')
+    .addBearerAuth({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      name: 'Authorization',
+      description: 'Enter JWT access token',
+      in: 'header',
+    })
     .build();
 
   var documentFactory = (): ReturnType<typeof SwaggerModule.createDocument> =>
