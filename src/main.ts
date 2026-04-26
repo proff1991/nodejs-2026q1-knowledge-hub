@@ -7,6 +7,7 @@ import { AppLoggerService } from './common/logger/app-logger.service';
 import { PasswordExcludeInterceptor } from './common/interceptors/password-exclude.interceptor';
 import { HttpLoggingInterceptor } from './common/interceptors/http-logging.interceptor';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { setupProcessErrorHandlers } from './common/process/process-error-handlers';
 
 var bootstrap = async (): Promise<void> => {
   var app = await NestFactory.create(AppModule, {
@@ -16,6 +17,9 @@ var bootstrap = async (): Promise<void> => {
   var logger = app.get(AppLoggerService);
 
   app.useLogger(logger);
+
+  setupProcessErrorHandlers(app, logger);
+
   app.useGlobalFilters(new GlobalExceptionFilter(logger));
 
   var rawPort = process.env.PORT;
