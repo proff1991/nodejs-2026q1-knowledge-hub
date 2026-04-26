@@ -1,7 +1,6 @@
 import {
     CallHandler
     , ExecutionContext
-    , NotFoundException
 } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
 import { firstValueFrom, of, throwError } from 'rxjs';
@@ -167,57 +166,7 @@ describe('HttpLoggingInterceptor', () => {
         );
     });
 
-    it('should log failed request and rethrow error', async () => {
-        var loggerMock = createLoggerMock();
-        var interceptor = new HttpLoggingInterceptor(
-            loggerMock as unknown as AppLoggerService,
-        );
-
-        var request: MockRequest = {
-            method: 'GET',
-            originalUrl: '/article/not-existing-id',
-            params: {
-                id: 'not-existing-id',
-            },
-            query: {},
-            body: undefined,
-            headers: {},
-        };
-
-        var response: MockResponse = {
-            statusCode: 404,
-        };
-
-        var error = new NotFoundException('Article not found');
-
-        await expect(
-            firstValueFrom(
-                interceptor.intercept(
-                    createContext(request, response),
-                    createErrorCallHandler(error),
-                ),
-            ),
-        ).rejects.toBe(error);
-
-        expect(loggerMock.log).toHaveBeenCalledTimes(1);
-
-        expect(loggerMock.error).toHaveBeenCalledTimes(1);
-
-        expect(loggerMock.error).toHaveBeenCalledWith(
-            'Request failed',
-            expect.any(String),
-            'HttpLoggingInterceptor',
-            {
-                method: 'GET',
-                url: '/article/not-existing-id',
-                statusCode: 404,
-                durationMs: expect.any(Number),
-                error: 'Article not found',
-            },
-        );
-    });
-
-    it('should use 500 status code for unknown errors', async () => {
+    it('should pass errors to global exception filter without logging error', async () => {
         var loggerMock = createLoggerMock();
         var interceptor = new HttpLoggingInterceptor(
             loggerMock as unknown as AppLoggerService,
@@ -244,17 +193,21 @@ describe('HttpLoggingInterceptor', () => {
             ),
         ).rejects.toBe(error);
 
-        expect(loggerMock.error).toHaveBeenCalledWith(
-            'Request failed',
-            expect.any(String),
+        expect(loggerMock.log).toHaveBeenCalledTimes(1);
+
+        expect(loggerMock.log).toHaveBeenCalledWith(
+            'Incoming request',
             'HttpLoggingInterceptor',
             {
                 method: 'GET',
                 url: '/broken',
-                statusCode: 500,
-                durationMs: expect.any(Number),
-                error: 'Unexpected failure',
+                params: {},
+                query: {},
+                body: undefined,
+                headers: {},
             },
         );
+
+        expect(loggerMock.error).not.toHaveBeenCalled();
     });
 });
