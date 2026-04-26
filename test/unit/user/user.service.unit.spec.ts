@@ -1,7 +1,7 @@
 import {
-    BadRequestException,
-    ForbiddenException,
-    NotFoundException,
+    BadRequestException
+    , ForbiddenException
+    , NotFoundException
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import * as bcrypt from 'bcrypt';
