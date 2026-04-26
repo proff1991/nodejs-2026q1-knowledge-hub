@@ -2,7 +2,7 @@
 
 REST API for a **Knowledge Hub** platform built with **NestJS**, **TypeScript**, **PostgreSQL**, and **Prisma ORM**.
 
-This repository contains the implementation up to **08a-testing**.
+This repository contains the implementation up to **08b-logging-errors**.
 
 ## Stack
 
@@ -13,6 +13,9 @@ This repository contains the implementation up to **08a-testing**.
 - Prisma ORM
 - Swagger / OpenAPI
 - JWT authentication and authorization
+- Custom application logger
+- Centralized error handling
+- File logging with rotation
 - Vitest unit tests
 - Jest e2e tests for previous/auth-related assignments
 - Docker / Docker Compose
@@ -65,6 +68,24 @@ Implemented for the JWT authentication assignment:
   - `POST /auth/signup`
   - `POST /auth/login`
 
+### Logging and error handling
+
+Implemented for the 08b logging/errors assignment:
+
+- custom Nest logger configured through `LOG_LEVEL`
+- console logging
+- file logging to `logs/app.log`
+- log file rotation through `LOG_MAX_FILE_SIZE`
+- incoming HTTP request logging
+- outgoing HTTP response logging
+- Docker healthcheck request logging is skipped to avoid log spam
+- sensitive data sanitization in logs
+- global exception filter with consistent error response shape
+- custom application error classes
+- process-level handlers for:
+  - `uncaughtException`
+  - `unhandledRejection`
+
 ### Additional functionality
 
 - DTO validation through global `ValidationPipe`
@@ -91,7 +112,7 @@ Passwords are stored in the database as hashes.
 
 ## Environment variables
 
-You can use `.env.example` as a template:
+Use `.env.example` as a template:
 
 ```bash
 cp .env.example .env
@@ -121,13 +142,53 @@ POSTGRES_HOST=db
 POSTGRES_PORT=5432
 
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/knowledge_hub?schema=public
+
+LOG_LEVEL=log
+LOG_MAX_FILE_SIZE=1048576
 ```
 
-Notes:
+### Database connection notes
 
-- for **local Nest app + Dockerized PostgreSQL**, use `localhost` in `DATABASE_URL`;
-- for **app running inside Docker Compose**, database host is `db`;
+- For **local Nest app + Dockerized PostgreSQL**, use `localhost` in `DATABASE_URL`.
+- For **app running inside Docker Compose**, database host is `db`.
 - `.env` must not be committed.
+
+### Logging environment variables
+
+`LOG_LEVEL` controls which messages are written by the application logger.
+
+Supported levels:
+
+```text
+debug
+verbose
+log
+warn
+error
+fatal
+```
+
+Recommended default:
+
+```env
+LOG_LEVEL=log
+```
+
+`LOG_MAX_FILE_SIZE` controls log file rotation size in bytes.
+
+Example:
+
+```env
+LOG_MAX_FILE_SIZE=1048576
+```
+
+This value means that `logs/app.log` is rotated after it reaches about 1 MB.
+
+For manual rotation testing, a smaller value can be used:
+
+```env
+LOG_MAX_FILE_SIZE=1000
+```
 
 ## Installation
 
@@ -203,6 +264,8 @@ Adminer will be available at:
 ```text
 http://localhost:8080
 ```
+
+The production Docker image runs the application under a non-root user and creates `/app/logs` with write permissions for that user.
 
 ## Prisma commands
 
@@ -382,9 +445,194 @@ POST   /comment
 DELETE /comment/:id
 ```
 
+## Logging
+
+Application logs are written to the console and to:
+
+```text
+logs/app.log
+```
+
+When `logs/app.log` reaches `LOG_MAX_FILE_SIZE`, it is rotated. The old file is renamed using a timestamp, and a new `app.log` file is created.
+
+Example rotated file name:
+
+```text
+logs/app-2026-04-27T12-30-15-123Z.log
+```
+
+The `logs/` directory and log files are ignored by Git.
+
+### Request and response logs
+
+The application logs incoming HTTP requests and outgoing HTTP responses.
+
+Example request log:
+
+```json
+{
+  "timestamp": "2026-04-26T23:19:51.960Z",
+  "level": "log",
+  "message": "Incoming request",
+  "context": "HttpLoggingInterceptor",
+  "data": [
+    {
+      "method": "POST",
+      "url": "/auth/login",
+      "params": {},
+      "query": {},
+      "body": {
+        "login": "admin",
+        "password": "[REDACTED]"
+      },
+      "headers": {
+        "content-type": "application/json"
+      }
+    }
+  ]
+}
+```
+
+Docker healthcheck requests are skipped by the HTTP logging interceptor to avoid filling the log file with repeated `GET /` entries.
+
+### Sensitive data sanitization
+
+Sensitive fields are redacted before being written to logs.
+
+Examples of redacted fields:
+
+```text
+password
+oldPassword
+newPassword
+old_password
+new_password
+token
+accessToken
+refreshToken
+access_token
+refresh_token
+authorization
+cookie
+set-cookie
+```
+
+Example:
+
+```json
+{
+  "login": "admin",
+  "password": "[REDACTED]",
+  "accessToken": "[REDACTED]"
+}
+```
+
+## Error handling
+
+### Global exception filter
+
+All application errors are handled by the global exception filter.
+
+Error responses use a consistent shape:
+
+```json
+{
+  "statusCode": 400,
+  "timestamp": "2026-04-26T23:22:13.168Z",
+  "path": "/auth/login",
+  "method": "POST",
+  "message": "Bad Request",
+  "error": "Bad Request"
+}
+```
+
+Unexpected errors are returned as a generic internal server error response:
+
+```json
+{
+  "statusCode": 500,
+  "timestamp": "2026-04-26T23:22:13.168Z",
+  "path": "/auth/login",
+  "method": "POST",
+  "message": "Internal server error",
+  "error": "Internal Server Error"
+}
+```
+
+Full error details are written to application logs.
+
+### Custom application errors
+
+The application uses custom error classes for expected application errors:
+
+```text
+AppBadRequestError
+AppNotFoundError
+AppForbiddenError
+AppUnauthorizedError
+AppUnprocessableEntityError
+```
+
+These classes extend standard NestJS HTTP exceptions, so existing status codes and HTTP behavior are preserved.
+
+### Process-level error handlers
+
+The application handles process-level errors:
+
+```text
+uncaughtException
+unhandledRejection
+```
+
+When one of these errors occurs, the application:
+
+```text
+1. writes a fatal log entry;
+2. tries to close the Nest application gracefully;
+3. exits the process with code 1.
+```
+
+## Manual checks
+
+### Check request logging and sanitization
+
+PowerShell:
+
+```powershell
+curl.exe -X POST "http://localhost:4000/auth/login" `
+  -H "Content-Type: application/json" `
+  --data-raw '{\"login\":\"admin\",\"password\":\"admin123\"}'
+```
+
+Alternative PowerShell command:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:4000/auth/login" `
+  -ContentType "application/json" `
+  -Body '{"login":"admin","password":"admin123"}'
+```
+
+The request body should appear in logs with the password redacted:
+
+```json
+"password": "[REDACTED]"
+```
+
+### Check log rotation
+
+Set a small value in `.env`:
+
+```env
+LOG_MAX_FILE_SIZE=1000
+```
+
+Restart the application and send several requests. The `logs/` directory should contain `app.log` and rotated files.
+
 ## Testing
 
-The project contains unit tests for the **08a-testing** assignment implemented with **Vitest**.
+The project contains unit tests for the **08a-testing** and **08b-logging-errors** assignments implemented with **Vitest**.
 
 Unit tests are located in:
 
@@ -398,7 +646,7 @@ test/unit
 npm run test
 ```
 
-For the 08a assignment, the default test command runs the Vitest unit test suite.
+The default test command runs the Vitest unit test suite.
 
 ### Run unit tests only
 
@@ -435,8 +683,15 @@ The unit test suite covers:
 - UUID validation pipe
 - DTO validation through `class-validator`
 - password exclusion interceptor
+- HTTP request/response logging interceptor
+- global exception filter
+- custom application errors
+- application logger service
+- file log writer with rotation
+- sensitive log data sanitization
+- process-level error handlers
 - Prisma mocking without real database calls
-- JWT, refresh token, and RBAC edge cases
+- JWT, refresh token, RBAC, logging, and error handling edge cases
 
 ### Legacy Jest e2e tests
 
@@ -446,7 +701,7 @@ Older Jest e2e tests are kept in the repository for previous assignments:
 npm run test:base
 ```
 
-These tests were originally created before JWT authorization was added. Since protected routes now require an access token, this legacy script is not used as the default test command for 08a.
+These tests were originally created before JWT authorization was added. Since protected routes now require an access token, this legacy script is not used as the default test command.
 
 ### Auth-related Jest e2e tests
 
@@ -479,6 +734,7 @@ npx prisma migrate reset --force
 | `npm run test` | Run Vitest unit test suite |
 | `npm run test:unit` | Run Vitest unit tests |
 | `npm run test:coverage` | Run Vitest unit tests with coverage |
+| `npm run test:all` | Run unit tests and auth-related Jest suites |
 | `npm run test:base` | Run legacy Jest e2e tests from previous assignments |
 | `npm run test:auth` | Run auth Jest e2e tests |
 | `npm run test:refresh` | Run refresh token Jest e2e tests |
@@ -525,10 +781,11 @@ If Docker build fails with an error about `package.json` and `package-lock.json`
 npm install
 ```
 
-If the problem is related to platform-specific lock entries, regenerate the lock file with the same Node image used by Docker:
+If the problem is related to a corrupted lock file, remove `package-lock.json` and regenerate it:
 
 ```bash
-docker run --rm -v "${PWD}:/app" -w /app node:24-alpine sh -lc "npm install --package-lock-only"
+rm package-lock.json
+npm install
 ```
 
 Then rebuild:
@@ -537,9 +794,78 @@ Then rebuild:
 docker compose build --no-cache
 ```
 
+### Docker logs fail with `EACCES`
+
+If the application logs this error inside Docker:
+
+```text
+EACCES: permission denied, mkdir '/app/logs'
+```
+
+make sure the Dockerfile creates `/app/logs` and gives ownership to the application user before `USER appuser`:
+
+```dockerfile
+RUN addgroup -S appgroup \
+    && adduser -S appuser -G appgroup \
+    && mkdir -p /app/logs \
+    && chown -R appuser:appgroup /app/logs
+```
+
+Then rebuild the image:
+
+```bash
+docker compose build --no-cache
+docker compose up
+```
+
+### PowerShell curl sends invalid JSON
+
+If PowerShell `curl.exe` returns an error like:
+
+```text
+Expected property name or '}' in JSON at position 1
+```
+
+use `--data-raw` with escaped JSON:
+
+```powershell
+curl.exe -X POST "http://localhost:4000/auth/login" `
+  -H "Content-Type: application/json" `
+  --data-raw '{\"login\":\"admin\",\"password\":\"admin123\"}'
+```
+
+Or use `Invoke-RestMethod`:
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "http://localhost:4000/auth/login" `
+  -ContentType "application/json" `
+  -Body '{"login":"admin","password":"admin123"}'
+```
+
+### Login returns `403 Authentication failed`
+
+If the request body is valid but login returns:
+
+```json
+{
+  "statusCode": 403,
+  "message": "Authentication failed"
+}
+```
+
+check that migrations and seed data were applied:
+
+```bash
+docker compose up -d db
+npx prisma migrate reset --force
+```
+
 ## Notes
 
 - The application targets Node.js `>=24.10.0 <25`.
 - The application uses generated Prisma Client from `src/generated/prisma`.
 - Passwords are never returned in API responses.
+- Sensitive fields are never written to logs in plain text.
 - Unit tests do not perform real HTTP requests or database calls.
