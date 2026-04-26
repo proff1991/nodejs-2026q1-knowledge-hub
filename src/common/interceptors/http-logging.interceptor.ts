@@ -5,7 +5,7 @@ import {
     , Injectable
     , NestInterceptor
 } from '@nestjs/common';
-import { Observable, catchError, tap, throwError } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 import { AppLoggerService } from '../logger/app-logger.service';
 
 type LoggedRequest = {
@@ -51,23 +51,7 @@ export class HttpLoggingInterceptor implements NestInterceptor {
                     statusCode: response.statusCode,
                     durationMs: Date.now() - startedAt,
                 });
-            }),
-            catchError((error: unknown) => {
-                this.logger.error(
-                    'Request failed',
-                    this.getErrorStack(error),
-                    this.contextName,
-                    {
-                        method: request.method,
-                        url: this.getRequestUrl(request),
-                        statusCode: this.getErrorStatus(error),
-                        durationMs: Date.now() - startedAt,
-                        error: this.getErrorMessage(error),
-                    },
-                );
-
-                return throwError(() => error);
-            }),
+            })
         );
     }
 
@@ -75,27 +59,4 @@ export class HttpLoggingInterceptor implements NestInterceptor {
         return request.originalUrl ?? request.url ?? '';
     }
 
-    private getErrorStatus(error: unknown): number {
-        if (error instanceof HttpException) {
-            return error.getStatus();
-        }
-
-        return 500;
-    }
-
-    private getErrorMessage(error: unknown): string {
-        if (error instanceof Error) {
-            return error.message;
-        }
-
-        return String(error);
-    }
-
-    private getErrorStack(error: unknown): string {
-        if (error instanceof Error && typeof error.stack === 'string') {
-            return error.stack;
-        }
-
-        return 'No stack trace';
-    }
 }
