@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { PasswordExcludeInterceptor } from './common/interceptors/password-exclude.interceptor';
 
 var bootstrap = async (): Promise<void> => {
   var app = await NestFactory.create(AppModule);
@@ -20,6 +21,8 @@ var bootstrap = async (): Promise<void> => {
       forbidNonWhitelisted: true,
     }),
   );
+
+  app.useGlobalInterceptors(new PasswordExcludeInterceptor());
 
   var config = new DocumentBuilder()
     .setTitle('Knowledge Hub API')
