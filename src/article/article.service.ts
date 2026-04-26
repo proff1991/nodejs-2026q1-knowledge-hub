@@ -1,5 +1,6 @@
 import {
-  Injectable
+  BadRequestException
+  , Injectable
   , NotFoundException
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
@@ -55,6 +56,27 @@ export class ArticleService {
     }
 
     return 'DRAFT';
+  }
+
+  private validateStatusTransition(
+    currentStatus: 'DRAFT' | 'PUBLISHED' | 'ARCHIVED',
+    nextStatus: ArticleStatus,
+  ): void {
+    var nextDbStatus = this.toDbStatus(nextStatus);
+
+    if (currentStatus === nextDbStatus) {
+      return;
+    }
+
+    if (currentStatus === 'DRAFT' && nextDbStatus === 'PUBLISHED') {
+      return;
+    }
+
+    if (currentStatus === 'PUBLISHED' && nextDbStatus === 'ARCHIVED') {
+      return;
+    }
+
+    throw new BadRequestException('Invalid article status transition');
   }
 
   private buildTagConnectOrCreate(tags?: string[]) {
@@ -194,6 +216,10 @@ export class ArticleService {
 
     if (!article) {
       throw new NotFoundException('Article not found');
+    }
+
+    if (typeof updateArticleDto.status !== 'undefined') {
+      this.validateStatusTransition(article.status, updateArticleDto.status);
     }
 
     var updatedArticle = await this.prisma.article.update({

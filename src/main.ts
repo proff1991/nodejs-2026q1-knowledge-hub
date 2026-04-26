@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { PasswordExcludeInterceptor } from './common/interceptors/password-exclude.interceptor';
 
 var bootstrap = async (): Promise<void> => {
   var app = await NestFactory.create(AppModule);
@@ -21,10 +22,20 @@ var bootstrap = async (): Promise<void> => {
     }),
   );
 
+  app.useGlobalInterceptors(new PasswordExcludeInterceptor());
+
   var config = new DocumentBuilder()
     .setTitle('Knowledge Hub API')
     .setDescription('REST API for the Knowledge Hub platform')
     .setVersion('1.0')
+    .addBearerAuth({
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      name: 'Authorization',
+      description: 'Enter JWT access token',
+      in: 'header',
+    })
     .build();
 
   var documentFactory = (): ReturnType<typeof SwaggerModule.createDocument> =>
