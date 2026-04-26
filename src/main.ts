@@ -4,9 +4,17 @@ import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
 import { PasswordExcludeInterceptor } from './common/interceptors/password-exclude.interceptor';
+import { AppLoggerService } from './common/logger/app-logger.service';
 
 var bootstrap = async (): Promise<void> => {
-  var app = await NestFactory.create(AppModule);
+  var app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+
+  var logger = app.get(AppLoggerService);
+
+  app.useLogger(logger);
+
   var rawPort = process.env.PORT;
   var port = rawPort ? Number(rawPort) : 4000;
 
