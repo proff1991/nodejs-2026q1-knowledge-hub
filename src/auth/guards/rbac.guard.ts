@@ -1,10 +1,12 @@
 import {
     CanActivate
     , ExecutionContext
-    , ForbiddenException
     , Injectable
-    , UnauthorizedException
 } from '@nestjs/common';
+import {
+    AppForbiddenError
+    , AppUnauthorizedError
+} from '../../common/errors/application-errors';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -48,7 +50,7 @@ export class RbacGuard implements CanActivate {
     }
 
     private forbid(): never {
-        throw new ForbiddenException('Insufficient permissions');
+        throw new AppForbiddenError('Insufficient permissions');
     }
 
     private async ensureArticleOwner(articleId: string, userId: string): Promise<void> {
@@ -96,7 +98,7 @@ export class RbacGuard implements CanActivate {
         const user = request.user;
 
         if (!user) {
-            throw new UnauthorizedException('Access token is required');
+            throw new AppUnauthorizedError('Access token is required');
         }
 
         if (user.role === UserRole.ADMIN) {

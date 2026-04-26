@@ -3,10 +3,25 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { AppLoggerService } from './common/logger/app-logger.service';
 import { PasswordExcludeInterceptor } from './common/interceptors/password-exclude.interceptor';
+import { HttpLoggingInterceptor } from './common/interceptors/http-logging.interceptor';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { setupProcessErrorHandlers } from './common/process/process-error-handlers';
 
 var bootstrap = async (): Promise<void> => {
-  var app = await NestFactory.create(AppModule);
+  var app = await NestFactory.create(AppModule, {
+    bufferLogs: true,
+  });
+
+  var logger = app.get(AppLoggerService);
+
+  app.useLogger(logger);
+
+  setupProcessErrorHandlers(app, logger);
+
+  app.useGlobalFilters(new GlobalExceptionFilter(logger));
+
   var rawPort = process.env.PORT;
   var port = rawPort ? Number(rawPort) : 4000;
 
@@ -22,7 +37,7 @@ var bootstrap = async (): Promise<void> => {
     }),
   );
 
-  app.useGlobalInterceptors(new PasswordExcludeInterceptor());
+  app.useGlobalInterceptors(new HttpLoggingInterceptor(logger), new PasswordExcludeInterceptor());
 
   var config = new DocumentBuilder()
     .setTitle('Knowledge Hub API')

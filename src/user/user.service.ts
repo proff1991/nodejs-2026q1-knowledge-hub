@@ -1,9 +1,9 @@
+import { Injectable } from '@nestjs/common';
 import {
-  BadRequestException
-  , ForbiddenException
-  , Injectable
-  , NotFoundException
-} from '@nestjs/common';
+  AppBadRequestError
+  , AppForbiddenError
+  , AppNotFoundError
+} from '../common/errors/application-errors';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateUserDto, UserRole } from './dto/create-user.dto';
@@ -65,7 +65,7 @@ export class UserService {
     });
 
     if (existingUser) {
-      throw new BadRequestException('Login is already taken');
+      throw new AppBadRequestError('Login is already taken');
     }
 
     var hashedPassword = await bcrypt.hash(
@@ -129,7 +129,7 @@ export class UserService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new AppNotFoundError('User not found');
     }
 
     return this.toResponse(user);
@@ -147,11 +147,11 @@ export class UserService {
     var hasPasswordUpdate = hasOldPassword || hasNewPassword;
 
     if (!hasRoleUpdate && !hasPasswordUpdate) {
-      throw new BadRequestException('Nothing to update');
+      throw new AppBadRequestError('Nothing to update');
     }
 
     if (hasPasswordUpdate && (!hasOldPassword || !hasNewPassword)) {
-      throw new BadRequestException('oldPassword and newPassword are required');
+      throw new AppBadRequestError('oldPassword and newPassword are required');
     }
 
     var user = await this.prisma.user.findUnique({
@@ -159,7 +159,7 @@ export class UserService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new AppNotFoundError('User not found');
     }
 
     if (hasRoleUpdate) {
@@ -173,7 +173,7 @@ export class UserService {
       );
 
       if (!isPasswordCorrect) {
-        throw new ForbiddenException('Old password is wrong');
+        throw new AppForbiddenError('Old password is wrong');
       }
 
       data.password = await bcrypt.hash(
@@ -196,7 +196,7 @@ export class UserService {
     });
 
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new AppNotFoundError('User not found');
     }
 
     await this.prisma.$transaction([
