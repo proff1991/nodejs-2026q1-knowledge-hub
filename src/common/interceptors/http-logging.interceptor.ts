@@ -33,6 +33,10 @@ export class HttpLoggingInterceptor implements NestInterceptor {
         var response = httpContext.getResponse<LoggedResponse>();
         var startedAt = Date.now();
 
+        if (this.isHealthCheckRequest(request)) {
+            return next.handle();
+        }
+
         this.logger.log('Incoming request', this.contextName, {
             method: request.method,
             url: this.getRequestUrl(request),
@@ -50,12 +54,33 @@ export class HttpLoggingInterceptor implements NestInterceptor {
                     statusCode: response.statusCode,
                     durationMs: Date.now() - startedAt,
                 });
-            })
+            }),
         );
     }
 
     private getRequestUrl(request: LoggedRequest): string {
         return request.originalUrl ?? request.url ?? '';
+    }
+
+    private isHealthCheckRequest(request: LoggedRequest): boolean {
+        var method = request.method?.toUpperCase();
+        var url = this.getRequestUrl(request);
+        var userAgent = this.getHeaderValue(request.headers, 'user-agent');
+
+        return method === 'GET' && url === '/' && userAgent === 'node';
+    }
+
+    private getHeaderValue(
+        headers: Record<string, unknown> | undefined,
+        headerName: string,
+    ): string {
+        var value = headers?.[headerName];
+
+        if (typeof value === 'string') {
+            return value;
+        }
+
+        return '';
     }
 
 }

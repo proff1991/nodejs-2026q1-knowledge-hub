@@ -210,4 +210,40 @@ describe('HttpLoggingInterceptor', () => {
 
         expect(loggerMock.error).not.toHaveBeenCalled();
     });
+
+    it('should skip Docker healthcheck request logs', async () => {
+        var loggerMock = createLoggerMock();
+        var interceptor = new HttpLoggingInterceptor(
+            loggerMock as unknown as AppLoggerService,
+        );
+
+        var request: MockRequest = {
+            method: 'GET',
+            originalUrl: '/',
+            headers: {
+                'user-agent': 'node',
+            },
+        };
+
+        var response: MockResponse = {
+            statusCode: 200,
+        };
+
+        var result = await firstValueFrom(
+            interceptor.intercept(
+                createContext(request, response),
+                createCallHandler({
+                    status: 'ok',
+                }),
+            ),
+        );
+
+        expect(result).toEqual({
+            status: 'ok',
+        });
+
+        expect(loggerMock.log).not.toHaveBeenCalled();
+        expect(loggerMock.error).not.toHaveBeenCalled();
+    });
+
 });
