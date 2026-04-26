@@ -3,8 +3,9 @@ import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
-import { PasswordExcludeInterceptor } from './common/interceptors/password-exclude.interceptor';
 import { AppLoggerService } from './common/logger/app-logger.service';
+import { PasswordExcludeInterceptor } from './common/interceptors/password-exclude.interceptor';
+import { HttpLoggingInterceptor } from './common/interceptors/http-logging.interceptor';
 
 var bootstrap = async (): Promise<void> => {
   var app = await NestFactory.create(AppModule, {
@@ -30,7 +31,7 @@ var bootstrap = async (): Promise<void> => {
     }),
   );
 
-  app.useGlobalInterceptors(new PasswordExcludeInterceptor());
+  app.useGlobalInterceptors(new HttpLoggingInterceptor(logger), new PasswordExcludeInterceptor());
 
   var config = new DocumentBuilder()
     .setTitle('Knowledge Hub API')
