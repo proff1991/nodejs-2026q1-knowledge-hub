@@ -2,8 +2,8 @@ import {
     CanActivate
     , ExecutionContext
     , Injectable
-    , UnauthorizedException
 } from '@nestjs/common';
+import { AppUnauthorizedError } from '../../common/errors/application-errors';
 import { JwtService } from '@nestjs/jwt';
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
@@ -62,13 +62,13 @@ export class AccessTokenGuard implements CanActivate {
         const authorizationHeader = request.headers.authorization;
 
         if (!authorizationHeader || typeof authorizationHeader !== 'string') {
-            throw new UnauthorizedException('Access token is required');
+            throw new AppUnauthorizedError('Access token is required');
         }
 
         const [scheme, token] = authorizationHeader.split(' ');
 
         if (scheme !== 'Bearer' || !token) {
-            throw new UnauthorizedException('Invalid authorization header');
+            throw new AppUnauthorizedError('Invalid authorization header');
         }
 
         try {
@@ -81,10 +81,10 @@ export class AccessTokenGuard implements CanActivate {
             return true;
         } catch (error) {
             if (error instanceof Error && error.name === 'TokenExpiredError') {
-                throw new UnauthorizedException('Access token expired');
+                throw new AppUnauthorizedError('Access token expired');
             }
 
-            throw new UnauthorizedException('Invalid access token');
+            throw new AppUnauthorizedError('Invalid access token');
         }
     }
 }

@@ -1,8 +1,8 @@
+import { Injectable } from '@nestjs/common';
 import {
-  Injectable
-  , NotFoundException
-  , UnprocessableEntityException
-} from '@nestjs/common';
+  AppNotFoundError
+  , AppUnprocessableEntityError
+} from '../common/errors/application-errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCommentDto } from './dto/create-comment.dto';
 import { Comment } from './entities/comment.entity';
@@ -43,7 +43,7 @@ export class CommentService {
     });
 
     if (!article) {
-      throw new UnprocessableEntityException('Article not found');
+      throw new AppUnprocessableEntityError('Article not found');
     }
 
     var comment = await this.prisma.comment.create({
@@ -111,7 +111,7 @@ export class CommentService {
     });
 
     if (!comment) {
-      throw new NotFoundException('Comment not found');
+      throw new AppNotFoundError('Comment not found');
     }
 
     return this.toResponse(comment);
@@ -123,7 +123,7 @@ export class CommentService {
     });
 
     if (!comment) {
-      throw new NotFoundException('Comment not found');
+      throw new AppNotFoundError('Comment not found');
     }
 
     await this.prisma.comment.delete({

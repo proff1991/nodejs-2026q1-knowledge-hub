@@ -1,9 +1,9 @@
+import { Injectable } from '@nestjs/common';
 import {
-    BadRequestException
-    , ForbiddenException
-    , Injectable
-    , UnauthorizedException
-} from '@nestjs/common';
+    AppBadRequestError
+    , AppForbiddenError
+    , AppUnauthorizedError
+} from '../common/errors/application-errors';
 import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
@@ -106,7 +106,7 @@ export class AuthService {
         });
 
         if (existingUser) {
-            throw new BadRequestException('Login is already taken');
+            throw new AppBadRequestError('Login is already taken');
         }
 
         const saltRounds = Number(process.env.CRYPT_SALT ?? 10);
@@ -131,7 +131,7 @@ export class AuthService {
         });
 
         if (!user) {
-            throw new ForbiddenException('Authentication failed');
+            throw new AppForbiddenError('Authentication failed');
         }
 
         const isPasswordCorrect = await bcrypt.compare(
@@ -140,7 +140,7 @@ export class AuthService {
         );
 
         if (!isPasswordCorrect) {
-            throw new ForbiddenException('Authentication failed');
+            throw new AppForbiddenError('Authentication failed');
         }
 
         const tokens = await this.generateTokens(user as DbUser);
@@ -151,7 +151,7 @@ export class AuthService {
 
     async refresh(body: { refreshToken?: string }): Promise<TokensResponse> {
         if (!body || typeof body.refreshToken !== 'string' || body.refreshToken.length === 0) {
-            throw new UnauthorizedException('Refresh token is required');
+            throw new AppUnauthorizedError('Refresh token is required');
         }
 
         let payload: TokenPayload;
@@ -161,7 +161,7 @@ export class AuthService {
                 secret: this.getRefreshSecret(),
             });
         } catch {
-            throw new ForbiddenException('Invalid refresh token');
+            throw new AppForbiddenError('Invalid refresh token');
         }
 
         const user = await this.prisma.user.findUnique({
@@ -171,13 +171,13 @@ export class AuthService {
         });
 
         if (!user || user.login !== payload.login) {
-            throw new ForbiddenException('Invalid refresh token');
+            throw new AppForbiddenError('Invalid refresh token');
         }
 
         const storedToken = await this.findStoredRefreshToken(user.id, body.refreshToken);
 
         if (!storedToken) {
-            throw new ForbiddenException('Invalid refresh token');
+            throw new AppForbiddenError('Invalid refresh token');
         }
 
         await this.revokeRefreshToken(storedToken.id);
@@ -224,7 +224,7 @@ export class AuthService {
 
 
         if (!payload.exp) {
-            throw new ForbiddenException('Invalid refresh token');
+            throw new AppForbiddenError('Invalid refresh token');
         }
         const tokenHash = await this.hashToken(refreshToken);
         const expiresAt = new Date(payload.exp * 1000);
@@ -253,7 +253,7 @@ export class AuthService {
 
     async logout(body: { refreshToken?: string }): Promise<{ message: string }> {
         if (!body || typeof body.refreshToken !== 'string' || body.refreshToken.length === 0) {
-            throw new UnauthorizedException('Refresh token is required');
+            throw new AppUnauthorizedError('Refresh token is required');
         }
 
         let payload: TokenPayload;
@@ -263,13 +263,13 @@ export class AuthService {
                 secret: this.getRefreshSecret(),
             });
         } catch {
-            throw new ForbiddenException('Invalid refresh token');
+            throw new AppForbiddenError('Invalid refresh token');
         }
 
         const storedToken = await this.findStoredRefreshToken(payload.userId, body.refreshToken);
 
         if (!storedToken) {
-            throw new ForbiddenException('Invalid refresh token');
+            throw new AppForbiddenError('Invalid refresh token');
         }
 
         await this.revokeRefreshToken(storedToken.id);

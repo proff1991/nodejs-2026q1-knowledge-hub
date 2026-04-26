@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
+import { AppNotFoundError } from '../common/errors/application-errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { ListCategoryQueryDto } from './dto/list-category-query.dto';
@@ -68,7 +69,7 @@ export class CategoryService {
     });
 
     if (!category) {
-      throw new NotFoundException('Category not found');
+      throw new AppNotFoundError('Category not found');
     }
 
     return category;
@@ -80,7 +81,7 @@ export class CategoryService {
     });
 
     if (!category) {
-      throw new NotFoundException('Category not found');
+      throw new AppNotFoundError('Category not found');
     }
 
     return this.prisma.category.update({
@@ -102,7 +103,7 @@ export class CategoryService {
     });
 
     if (!category) {
-      throw new NotFoundException('Category not found');
+      throw new AppNotFoundError('Category not found');
     }
 
     await this.prisma.category.delete({

@@ -1,8 +1,8 @@
+import { Injectable } from '@nestjs/common';
 import {
-  BadRequestException
-  , Injectable
-  , NotFoundException
-} from '@nestjs/common';
+  AppBadRequestError
+  , AppNotFoundError
+} from '../common/errors/application-errors';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateArticleDto } from './dto/create-article.dto';
 import { UpdateArticleDto } from './dto/update-article.dto';
@@ -76,7 +76,7 @@ export class ArticleService {
       return;
     }
 
-    throw new BadRequestException('Invalid article status transition');
+    throw new AppBadRequestError('Invalid article status transition');
   }
 
   private buildTagConnectOrCreate(tags?: string[]) {
@@ -203,7 +203,7 @@ export class ArticleService {
     });
 
     if (!article) {
-      throw new NotFoundException('Article not found');
+      throw new AppNotFoundError('Article not found');
     }
 
     return this.toResponse(article);
@@ -215,7 +215,7 @@ export class ArticleService {
     });
 
     if (!article) {
-      throw new NotFoundException('Article not found');
+      throw new AppNotFoundError('Article not found');
     }
 
     if (typeof updateArticleDto.status !== 'undefined') {
@@ -279,7 +279,7 @@ export class ArticleService {
     });
 
     if (!article) {
-      throw new NotFoundException('Article not found');
+      throw new AppNotFoundError('Article not found');
     }
 
     await this.prisma.article.delete({
