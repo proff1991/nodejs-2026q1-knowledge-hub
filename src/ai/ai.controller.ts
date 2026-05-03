@@ -1,6 +1,7 @@
 import {
     Body
     , Controller
+    , Get
     , HttpCode
     , HttpStatus
     , Param
@@ -55,5 +56,11 @@ export class AiController {
         @Body() analyzeArticleDto: AnalyzeArticleDto,
     ) {
         return this.aiService.analyzeArticle(params.articleId, analyzeArticleDto);
+    }
+
+    @Get("usage")
+    @ApiOkResponse({ description: "AI usage statistics since service startup" })
+    getUsageStats() {
+        return this.aiService.getUsageStats();
     }
 }

@@ -1,5 +1,7 @@
 import { Injectable } from "@nestjs/common";
 import { ArticleService } from "../article/article.service";
+import { AiCacheService } from "./ai-cache.service";
+import { AiUsageService } from "./ai-usage.service";
 import { AnalyzeArticleDto } from "./dto/analyze-article.dto";
 import { GenerateDto } from "./dto/generate.dto";
 import { SummarizeArticleDto } from "./dto/summarize-article.dto";
@@ -24,9 +26,13 @@ export class AiService {
     constructor(
         private readonly geminiService: GeminiService,
         private readonly articleService: ArticleService,
+        private readonly aiCacheService: AiCacheService,
+        private readonly aiUsageService: AiUsageService,
     ) { }
 
     async generate(generateDto: GenerateDto): Promise<GenerateAiResponse> {
+        this.aiUsageService.trackRequest("generate");
+
         var result = await this.geminiService.generateText(
             buildGenericPrompt(generateDto.prompt),
             {
@@ -34,6 +40,8 @@ export class AiService {
                 temperature: generateDto.temperature,
             },
         );
+
+        this.aiUsageService.trackTokens(result.usageMetadata);
 
         return {
             text: result.text,
@@ -45,8 +53,22 @@ export class AiService {
         articleId: string,
         summarizeArticleDto: SummarizeArticleDto,
     ): Promise<SummarizeArticleResponse> {
+        this.aiUsageService.trackRequest("summarize");
+
         var article = await this.articleService.findOne(articleId);
         var maxLength = summarizeArticleDto.maxLength ?? "medium";
+        var cacheKey = this.aiCacheService.createKey([
+            "summarize",
+            article.id,
+            article.updatedAt,
+            maxLength,
+        ]);
+
+        var cachedResponse = this.aiCacheService.get<SummarizeArticleResponse>(cacheKey);
+
+        if (cachedResponse) {
+            return cachedResponse;
+        }
 
         var result = await this.geminiService.generateText(
             buildSummarizeArticlePrompt(article.title, article.content, maxLength),
@@ -56,19 +78,40 @@ export class AiService {
             },
         );
 
-        return {
+        this.aiUsageService.trackTokens(result.usageMetadata);
+
+        var response: SummarizeArticleResponse = {
             articleId: article.id,
             summary: result.text,
             originalLength: article.content.length,
             summaryLength: result.text.length,
         };
+
+        this.aiCacheService.set(cacheKey, response);
+
+        return response;
     }
 
     async translateArticle(
         articleId: string,
         translateArticleDto: TranslateArticleDto,
     ): Promise<TranslateArticleResponse> {
+        this.aiUsageService.trackRequest("translate");
+
         var article = await this.articleService.findOne(articleId);
+        var cacheKey = this.aiCacheService.createKey([
+            "translate",
+            article.id,
+            article.updatedAt,
+            translateArticleDto.targetLanguage,
+            translateArticleDto.sourceLanguage ?? "auto",
+        ]);
+
+        var cachedResponse = this.aiCacheService.get<TranslateArticleResponse>(cacheKey);
+
+        if (cachedResponse) {
+            return cachedResponse;
+        }
 
         var result = await this.geminiService.generateText(
             buildTranslateArticlePrompt(
@@ -83,17 +126,25 @@ export class AiService {
             },
         );
 
-        return {
+        this.aiUsageService.trackTokens(result.usageMetadata);
+
+        var response: TranslateArticleResponse = {
             articleId: article.id,
             translatedText: result.text,
             detectedLanguage: translateArticleDto.sourceLanguage ?? "auto",
         };
+
+        this.aiCacheService.set(cacheKey, response);
+
+        return response;
     }
 
     async analyzeArticle(
         articleId: string,
         analyzeArticleDto: AnalyzeArticleDto,
     ): Promise<AnalyzeArticleResponse> {
+        this.aiUsageService.trackRequest("analyze");
+
         var article = await this.articleService.findOne(articleId);
         var task = analyzeArticleDto.task ?? "review";
 
@@ -105,9 +156,18 @@ export class AiService {
             },
         );
 
+        this.aiUsageService.trackTokens(result.usageMetadata);
+
         return {
             articleId: article.id,
             ...this.parseAnalyzeResponse(result.text),
+        };
+    }
+
+    getUsageStats() {
+        return {
+            usage: this.aiUsageService.getStats(),
+            cache: this.aiCacheService.getStats(),
         };
     }
 
