@@ -21,6 +21,7 @@ import {
 } from "./types/ai.types";
 import { AiObservabilityService } from "./ai-observability.service";
 import { validateAnalyzeResponse } from "./validators/analyze-response.validator";
+import { AiConversationContextService } from "./ai-conversation-context.service";
 
 @Injectable()
 export class AiService {
@@ -30,14 +31,18 @@ export class AiService {
         private readonly aiCacheService: AiCacheService,
         private readonly aiUsageService: AiUsageService,
         private readonly aiObservabilityService: AiObservabilityService,
+        private readonly aiConversationContextService: AiConversationContextService,
     ) { }
 
     async generate(generateDto: GenerateDto): Promise<GenerateAiResponse> {
         return this.trackOperation("generate", async () => {
             this.aiUsageService.trackRequest("generate");
 
+            var sessionId = this.aiConversationContextService.resolveSessionId(generateDto.sessionId);
+            var contextMessages = this.aiConversationContextService.getMessages(sessionId);
+
             var result = await this.geminiService.generateText(
-                buildGenericPrompt(generateDto.prompt),
+                buildGenericPrompt(generateDto.prompt, contextMessages),
                 {
                     maxOutputTokens: generateDto.maxOutputTokens,
                     temperature: generateDto.temperature,
@@ -46,9 +51,16 @@ export class AiService {
 
             this.aiUsageService.trackTokens(result.usageMetadata);
 
+            this.aiConversationContextService.addTurn(
+                sessionId,
+                generateDto.prompt,
+                result.text,
+            );
+
             return {
                 text: result.text,
                 model: result.model,
+                sessionId,
             };
         });
     }
@@ -175,14 +187,14 @@ export class AiService {
     }
 
     getUsageStats() {
-        return {
+        return ({
             usage: this.aiUsageService.getStats(),
             cache: this.aiCacheService.getStats(),
-        };
+        });
     }
 
     getDiagnostics() {
-        return {
+        return ({
             model: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
             baseUrl: process.env.GEMINI_API_BASE_URL ?? "https://generativelanguage.googleapis.com",
             hasApiKey: Boolean(process.env.GEMINI_API_KEY),
@@ -190,7 +202,8 @@ export class AiService {
             cache: this.aiCacheService.getStats(),
             usage: this.aiUsageService.getStats(),
             observability: this.aiObservabilityService.getStats(),
-        };
+            conversationContext: this.aiConversationContextService.getStats(),
+        });
     }
 
     private async trackOperation<T>(

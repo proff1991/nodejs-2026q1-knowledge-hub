@@ -1,11 +1,27 @@
-export var buildGenericPrompt = (prompt: string): string =>
-    [
+import { ConversationContextMessage } from "../types/ai.types";
+
+export var buildGenericPrompt = (
+    prompt: string,
+    contextMessages: ConversationContextMessage[] = [],
+): string => {
+    var contextSection = contextMessages.length === 0
+        ? "No previous conversation context."
+        : contextMessages
+            .map((message) => `${message.role.toUpperCase()}: ${message.text}`)
+            .join("\n");
+
+    return [
         "You are an assistant inside the Knowledge Hub API.",
         "Answer clearly and helpfully.",
+        "Use the previous conversation context only when it is relevant.",
         "",
-        "User request:",
+        "Previous conversation context:",
+        contextSection,
+        "",
+        "Current user request:",
         prompt,
     ].join("\n");
+};
 
 export var buildSummarizeArticlePrompt = (
     articleTitle: string,

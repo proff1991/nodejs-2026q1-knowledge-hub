@@ -1,6 +1,15 @@
+export type ConversationContextRole = "user" | "assistant";
+
+export type ConversationContextMessage = {
+    role: ConversationContextRole;
+    text: string;
+    createdAt: string;
+};
+
 export type GenerateAiResponse = {
     text: string;
     model: string;
+    sessionId: string;
 };
 
 export type SummarizeArticleResponse = {

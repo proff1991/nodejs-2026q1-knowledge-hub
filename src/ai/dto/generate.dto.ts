@@ -3,6 +3,7 @@ import {
     , IsNumber
     , IsOptional
     , IsString
+    , IsUUID
     , Max
     , Min
     , MinLength
@@ -18,6 +19,14 @@ export class GenerateDto {
     @IsString()
     @MinLength(1)
     prompt: string;
+
+    @ApiPropertyOptional({
+        example: "6e1a8079-27b4-4fdc-9c5e-8c5be9d0f59b",
+        description: "Optional conversation session id for short-term memory",
+    })
+    @IsOptional()
+    @IsUUID()
+    sessionId?: string;
 
     @ApiPropertyOptional({
         example: 1024,
