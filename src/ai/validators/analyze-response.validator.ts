@@ -2,7 +2,7 @@ import { AnalyzeArticleResponse, ParsedAnalyzeArticleResponse } from "../types/a
 
 type AnalyzeValidationResult = Omit<AnalyzeArticleResponse, "articleId">;
 
-export var validateAnalyzeResponse = (rawText: string): AnalyzeValidationResult => {
+export let validateAnalyzeResponse = (rawText: string): AnalyzeValidationResult => {
     try {
         var parsed = JSON.parse(stripJsonFence(rawText)) as ParsedAnalyzeArticleResponse;
 
@@ -20,7 +20,7 @@ export var validateAnalyzeResponse = (rawText: string): AnalyzeValidationResult 
     }
 };
 
-var isAnalyzeResponseShape = (
+let isAnalyzeResponseShape = (
     value: ParsedAnalyzeArticleResponse,
 ): value is {
     analysis: string;
@@ -50,7 +50,7 @@ var isAnalyzeResponseShape = (
     return true;
 };
 
-var isSeverity = (severity: unknown): severity is "info" | "warning" | "error" => {
+let isSeverity = (severity: unknown): severity is "info" | "warning" | "error" => {
     if (severity === "info") {
         return true;
     }
@@ -66,7 +66,7 @@ var isSeverity = (severity: unknown): severity is "info" | "warning" | "error" =
     return false;
 };
 
-var stripJsonFence = (rawText: string): string =>
+let stripJsonFence = (rawText: string): string =>
     rawText
         .trim()
         .replace(/^```json\s*/i, "")
@@ -74,7 +74,7 @@ var stripJsonFence = (rawText: string): string =>
         .replace(/\s*```$/i, "")
         .trim();
 
-var createFallbackAnalyzeResponse = (rawText: string): AnalyzeValidationResult => ({
+let createFallbackAnalyzeResponse = (rawText: string): AnalyzeValidationResult => ({
     analysis: rawText,
     suggestions: [],
     severity: "info",

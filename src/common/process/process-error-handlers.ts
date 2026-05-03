@@ -11,7 +11,7 @@ type ProcessLike = {
     exit: (code?: number) => unknown;
 };
 
-export var setupProcessErrorHandlers = (
+export let setupProcessErrorHandlers = (
     app: Pick<INestApplication, 'close'>,
     logger: AppLoggerService,
     processRef: ProcessLike = process,
@@ -66,7 +66,7 @@ export var setupProcessErrorHandlers = (
     });
 };
 
-var normalizeProcessError = (reason: unknown): Error => {
+let normalizeProcessError = (reason: unknown): Error => {
     if (reason instanceof Error) {
         return reason;
     }

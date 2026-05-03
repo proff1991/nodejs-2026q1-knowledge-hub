@@ -1,6 +1,6 @@
 import { ConversationContextMessage } from "../types/ai.types";
 
-export var buildGenericPrompt = (
+export let buildGenericPrompt = (
     prompt: string,
     contextMessages: ConversationContextMessage[] = [],
 ): string => {
@@ -23,7 +23,7 @@ export var buildGenericPrompt = (
     ].join("\n");
 };
 
-export var buildSummarizeArticlePrompt = (
+export let buildSummarizeArticlePrompt = (
     articleTitle: string,
     articleContent: string,
     maxLength: "short" | "medium" | "detailed",
@@ -40,7 +40,7 @@ export var buildSummarizeArticlePrompt = (
         articleContent,
     ].join("\n");
 
-export var buildTranslateArticlePrompt = (
+export let buildTranslateArticlePrompt = (
     articleTitle: string,
     articleContent: string,
     targetLanguage: string,
@@ -59,7 +59,7 @@ export var buildTranslateArticlePrompt = (
         articleContent,
     ].join("\n");
 
-export var buildAnalyzeArticlePrompt = (
+export let buildAnalyzeArticlePrompt = (
     articleTitle: string,
     articleContent: string,
     task: "review" | "bugs" | "optimize" | "explain",
