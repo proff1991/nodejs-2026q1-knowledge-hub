@@ -109,11 +109,15 @@ export class RbacGuard implements CanActivate {
             return true;
         }
 
+        const resource = this.getResource(request);
+
+        if (resource === "ai") {
+            return true;
+        }
+
         if (user.role === UserRole.VIEWER) {
             this.forbid();
         }
-
-        const resource = this.getResource(request);
 
         if (resource === 'category' || resource === 'user') {
             this.forbid();

@@ -12,6 +12,11 @@ var sensitiveKeys = [
     'authorization',
     'cookie',
     'set-cookie',
+    "apikey",
+    "api_key",
+    "geminiapikey",
+    "gemini_api_key",
+    "x-goog-api-key"
 ];
 
 var redactedValue = '[REDACTED]';
@@ -19,7 +24,7 @@ var redactedValue = '[REDACTED]';
 var isSensitiveKey = (key: string): boolean =>
     sensitiveKeys.includes(key.toLowerCase());
 
-export var sanitizeLogData = (data: unknown): unknown => {
+export let sanitizeLogData = (data: unknown): unknown => {
     if (Array.isArray(data)) {
         return data.map((item) => sanitizeLogData(item));
     }
