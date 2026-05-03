@@ -13,7 +13,7 @@ import {
 @Injectable()
 export class GeminiService {
     private readonly defaultBaseUrl = "https://generativelanguage.googleapis.com";
-    private readonly defaultModel = "gemini-2.0-flash";
+    private readonly defaultModel = "gemini-2.5-flash";
     private readonly requestTimeoutMs = 30000;
 
     async generateText(
