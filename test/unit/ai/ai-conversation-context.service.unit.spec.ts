@@ -57,4 +57,39 @@ describe("AiConversationContextService", () => {
         expect(messages[0].text).toBe("question 1");
         expect(messages[9].text).toBe("answer 5");
     });
+
+    it("should return empty messages for unknown session", () => {
+        var service = new AiConversationContextService();
+
+        expect(service.getMessages("unknown-session")).toEqual([]);
+    });
+
+    it("should create session inside addTurn when session does not exist", () => {
+        var service = new AiConversationContextService();
+        var sessionId = "550e8400-e29b-41d4-a716-446655440000";
+
+        service.addTurn(sessionId, "Hello", "Hi");
+
+        expect(service.getMessages(sessionId)).toHaveLength(2);
+        expect(service.getStats()).toEqual({
+            activeSessions: 1,
+            totalMessages: 2,
+            maxMessagesPerSession: 10,
+            maxSessions: 100,
+        });
+    });
+
+    it("should trim old sessions when max sessions limit is exceeded", () => {
+        var service = new AiConversationContextService();
+
+        for (var index = 0; index < 101; index++) {
+            var sessionId = `550e8400-e29b-41d4-a716-44665544${String(index).padStart(4, "0")}`;
+
+            service.resolveSessionId(sessionId);
+            service.addTurn(sessionId, `question ${index}`, `answer ${index}`);
+        }
+
+        expect(service.getStats().activeSessions).toBe(100);
+    });
+
 });

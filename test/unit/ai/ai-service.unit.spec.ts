@@ -147,23 +147,23 @@ describe("AiService", () => {
 
     it("should translate article and cache response", async () => {
         geminiMock.generateText.mockResolvedValue({
-            text: "TypeScript покращує підтримуваність backend-проєктів.",
+            text: "TypeScript plibonigas prizorgeblecon en backend-projektoj.",
             model: "gemini-2.5-flash",
         });
 
         var firstResult = await service.translateArticle(article.id, {
-            targetLanguage: "Ukrainian",
+            targetLanguage: "Esperanto",
             sourceLanguage: "English",
         });
 
         var secondResult = await service.translateArticle(article.id, {
-            targetLanguage: "Ukrainian",
+            targetLanguage: "Esperanto",
             sourceLanguage: "English",
         });
 
         expect(firstResult).toEqual({
             articleId: article.id,
-            translatedText: "TypeScript покращує підтримуваність backend-проєктів.",
+            translatedText: "TypeScript plibonigas prizorgeblecon en backend-projektoj.",
             detectedLanguage: "English",
         });
 
@@ -227,5 +227,57 @@ describe("AiService", () => {
             minLatencyMs: expect.any(Number),
             maxLatencyMs: expect.any(Number),
         });
+    });
+
+    it("should use medium summary token limit by default", async () => {
+        geminiMock.generateText.mockResolvedValue({
+            text: "Medium summary",
+            model: "gemini-2.5-flash",
+        });
+
+        await service.summarizeArticle(article.id, {});
+
+        expect(geminiMock.generateText).toHaveBeenCalledWith(
+            expect.any(String),
+            {
+                maxOutputTokens: 512,
+                temperature: 0.3,
+            },
+        );
+    });
+
+    it("should use detailed summary token limit", async () => {
+        geminiMock.generateText.mockResolvedValue({
+            text: "Detailed summary",
+            model: "gemini-2.5-flash",
+        });
+
+        await service.summarizeArticle(article.id, {
+            maxLength: "detailed",
+        });
+
+        expect(geminiMock.generateText).toHaveBeenCalledWith(
+            expect.any(String),
+            {
+                maxOutputTokens: 1024,
+                temperature: 0.3,
+            },
+        );
+    });
+
+    it("should translate article with auto detected source language", async () => {
+        geminiMock.generateText.mockResolvedValue({
+            text: "Translated text",
+            model: "gemini-2.5-flash",
+        });
+
+        var result = await service.translateArticle(article.id, {
+            targetLanguage: "Esperanto",
+        });
+
+        expect(result.detectedLanguage).toBe("auto");
+        expect(geminiMock.generateText.mock.calls[0][0]).toContain(
+            "Detect the source language automatically.",
+        );
     });
 });

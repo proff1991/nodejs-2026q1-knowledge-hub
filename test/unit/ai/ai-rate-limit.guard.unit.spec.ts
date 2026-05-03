@@ -90,4 +90,16 @@ describe("AiRateLimitGuard", () => {
         expect(guard.canActivate(context)).toBe(true);
         expect(() => guard.canActivate(context)).toThrow(HttpException);
     });
+
+    it("should use default limit and unknown ip fallback when env value is invalid", () => {
+        process.env.AI_RATE_LIMIT_RPM = "invalid";
+
+        var guard = new AiRateLimitGuard();
+        var response = {
+            setHeader: vi.fn(),
+        };
+        var context = createContext({}, response);
+
+        expect(guard.canActivate(context)).toBe(true);
+    });
 });

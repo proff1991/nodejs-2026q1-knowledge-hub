@@ -61,4 +61,66 @@ describe("validateAnalyzeResponse", () => {
             severity: "info",
         });
     });
+
+    it("should fallback when parsed value is null", () => {
+        var result = validateAnalyzeResponse("null");
+
+        expect(result).toEqual({
+            analysis: "null",
+            suggestions: [],
+            severity: "info",
+        });
+    });
+
+    it("should fallback when analysis is not a string", () => {
+        var raw = JSON.stringify({
+            analysis: 123,
+            suggestions: ["Add examples"],
+            severity: "info",
+        });
+
+        expect(validateAnalyzeResponse(raw)).toEqual({
+            analysis: raw,
+            suggestions: [],
+            severity: "info",
+        });
+    });
+
+    it("should fallback when suggestions is not an array", () => {
+        var raw = JSON.stringify({
+            analysis: "Text",
+            suggestions: "Add examples",
+            severity: "info",
+        });
+
+        expect(validateAnalyzeResponse(raw)).toEqual({
+            analysis: raw,
+            suggestions: [],
+            severity: "info",
+        });
+    });
+
+    it("should fallback when suggestion item is not a string", () => {
+        var raw = JSON.stringify({
+            analysis: "Text",
+            suggestions: ["Valid", 123],
+            severity: "info",
+        });
+
+        expect(validateAnalyzeResponse(raw)).toEqual({
+            analysis: raw,
+            suggestions: [],
+            severity: "info",
+        });
+    });
+
+    it("should parse valid error severity", () => {
+        var result = validateAnalyzeResponse(JSON.stringify({
+            analysis: "Serious issue.",
+            suggestions: ["Fix critical problem"],
+            severity: "error",
+        }));
+
+        expect(result.severity).toBe("error");
+    });
 });

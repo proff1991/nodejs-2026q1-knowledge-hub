@@ -59,4 +59,18 @@ describe("AiUsageService", () => {
             totalTokenCount: 0,
         });
     });
+
+    it("should use zero for missing token metadata fields", () => {
+        var service = new AiUsageService();
+
+        service.trackTokens({
+            promptTokenCount: 10,
+        });
+
+        expect(service.getStats().tokenUsage).toEqual({
+            promptTokenCount: 10,
+            candidatesTokenCount: 0,
+            totalTokenCount: 0,
+        });
+    });
 });

@@ -140,7 +140,115 @@ describe("GeminiService", () => {
     });
 
     it("should map network error to service unavailable", async () => {
+        (service as any).maxRetries = 1;
         fetchMock.mockRejectedValue(new Error("Network error"));
+
+        await expect(service.generateText("Hello")).rejects.toBeInstanceOf(
+            ServiceUnavailableException,
+        );
+    });
+
+    it("should use default base url and model when env values are missing", async () => {
+        delete process.env.GEMINI_API_BASE_URL;
+        delete process.env.GEMINI_MODEL;
+
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({
+            candidates: [
+                {
+                    content: {
+                        parts: [
+                            {
+                                text: "Generated text",
+                            },
+                        ],
+                    },
+                },
+            ],
+        }), {
+            status: 200,
+        }));
+
+        var result = await service.generateText("Hello");
+
+        expect(fetchMock.mock.calls[0][0]).toBe(
+            "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=test-api-key",
+        );
+
+        expect(result.model).toBe("gemini-2.0-flash");
+    });
+
+    it("should map empty Gemini response to service unavailable", async () => {
+        (service as any).maxRetries = 1;
+
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({
+            candidates: [
+                {
+                    content: {
+                        parts: [
+                            {
+                                text: "",
+                            },
+                        ],
+                    },
+                },
+            ],
+        }), {
+            status: 200,
+        }));
+
+        await expect(service.generateText("Hello")).rejects.toBeInstanceOf(
+            ServiceUnavailableException,
+        );
+    });
+
+    it("should map Gemini 429 error to service unavailable", async () => {
+        (service as any).maxRetries = 1;
+
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({
+            error: {
+                code: 429,
+                message: "Quota exceeded",
+                status: "RESOURCE_EXHAUSTED",
+                details: [
+                    {
+                        "@type": "type.googleapis.com/google.rpc.RetryInfo",
+                        retryDelay: "57s",
+                    },
+                ],
+            },
+        }), {
+            status: 429,
+        }));
+
+        await expect(service.generateText("Hello")).rejects.toBeInstanceOf(
+            ServiceUnavailableException,
+        );
+    });
+
+    it("should map Gemini 500 error to service unavailable", async () => {
+        (service as any).maxRetries = 1;
+
+        fetchMock.mockResolvedValue(new Response(JSON.stringify({
+            error: {
+                code: 500,
+                message: "Upstream error",
+                status: "INTERNAL",
+            },
+        }), {
+            status: 500,
+        }));
+
+        await expect(service.generateText("Hello")).rejects.toBeInstanceOf(
+            ServiceUnavailableException,
+        );
+    });
+
+    it("should map invalid Gemini json response to service unavailable", async () => {
+        (service as any).maxRetries = 1;
+
+        fetchMock.mockResolvedValue(new Response("not json", {
+            status: 400,
+        }));
 
         await expect(service.generateText("Hello")).rejects.toBeInstanceOf(
             ServiceUnavailableException,

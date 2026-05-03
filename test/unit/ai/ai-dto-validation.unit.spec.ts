@@ -62,11 +62,11 @@ describe("AI DTO validation", () => {
 
     it("should validate translate body", async () => {
         await expectValidationToPass(TranslateArticleDto, {
-            targetLanguage: "Ukrainian",
+            targetLanguage: "Esperanto",
         });
 
         await expectValidationToPass(TranslateArticleDto, {
-            targetLanguage: "Ukrainian",
+            targetLanguage: "Esperanto",
             sourceLanguage: "English",
         });
 
