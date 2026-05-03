@@ -12,6 +12,11 @@ var sensitiveKeys = [
     'authorization',
     'cookie',
     'set-cookie',
+    "apikey",
+    "api_key",
+    "geminiapikey",
+    "gemini_api_key",
+    "x-goog-api-key"
 ];
 
 var redactedValue = '[REDACTED]';
