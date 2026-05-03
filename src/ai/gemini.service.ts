@@ -4,17 +4,18 @@ import {
     , ServiceUnavailableException
 } from "@nestjs/common";
 import {
-    GeminiErrorResponse,
-    GeminiGenerateContentRequest,
-    GeminiGenerateContentResponse,
-    GeminiGenerateTextResult,
+    GeminiErrorResponse
+    , GeminiGenerateContentRequest
+    , GeminiGenerateContentResponse
+    , GeminiGenerateTextResult
 } from "./types/gemini.types";
 
 @Injectable()
 export class GeminiService {
     private readonly defaultBaseUrl = "https://generativelanguage.googleapis.com";
-    private readonly defaultModel = "gemini-2.5-flash";
+    private readonly defaultModel = "gemini-2.0-flash";
     private readonly requestTimeoutMs = 30000;
+    private readonly maxRetries = 3;
 
     async generateText(
         prompt: string,
@@ -23,11 +24,38 @@ export class GeminiService {
             temperature?: number;
         },
     ): Promise<GeminiGenerateTextResult> {
+        var lastError: unknown = null;
+
+        for (var attempt = 1; attempt <= this.maxRetries; attempt++) {
+            try {
+                return await this.generateTextOnce(prompt, options, attempt);
+            } catch (error) {
+                lastError = error;
+
+                if (!this.shouldRetry(error, attempt)) {
+                    throw error;
+                }
+
+                await this.delay(this.getBackoffMs(attempt));
+            }
+        }
+
+        throw lastError;
+    }
+
+    private async generateTextOnce(
+        prompt: string,
+        options: {
+            maxOutputTokens?: number;
+            temperature?: number;
+        } | undefined,
+        attempt: number,
+    ): Promise<GeminiGenerateTextResult> {
         var response = await this.fetchGenerateContent(prompt, options);
         var responseData = await this.readResponse(response);
 
         if (!response.ok) {
-            this.throwGeminiError(response.status, responseData);
+            this.throwGeminiError(response.status, responseData, attempt);
         }
 
         var geminiResponse = responseData as GeminiGenerateContentResponse;
@@ -168,22 +196,76 @@ export class GeminiService {
         return text;
     }
 
-    private throwGeminiError(statusCode: number, responseData: unknown): never {
+    private throwGeminiError(statusCode: number, responseData: unknown, attempt: number): never {
         var errorResponse = responseData as GeminiErrorResponse;
         var upstreamStatus = errorResponse.error?.status;
+        var retryAfter = this.extractRetryAfter(errorResponse);
 
         if (statusCode === 401 || statusCode === 403) {
             throw new InternalServerErrorException("Gemini API authentication failed");
         }
 
         if (statusCode === 429 || upstreamStatus === "RESOURCE_EXHAUSTED") {
-            throw new ServiceUnavailableException("Gemini API rate limit exceeded");
+            throw new ServiceUnavailableException({
+                message: "Gemini API rate limit exceeded",
+                upstreamStatus,
+                retryAfter,
+                attempt,
+            });
         }
 
         if (statusCode >= 500) {
-            throw new ServiceUnavailableException("Gemini API is unavailable");
+            throw new ServiceUnavailableException({
+                message: "Gemini API is unavailable",
+                upstreamStatus,
+                attempt,
+            });
         }
 
-        throw new ServiceUnavailableException("Gemini API request failed");
+        throw new ServiceUnavailableException({
+            message: "Gemini API request failed",
+            upstreamStatus,
+            attempt,
+        });
+    }
+
+    private shouldRetry(error: unknown, attempt: number): boolean {
+        if (attempt >= this.maxRetries) {
+            return false;
+        }
+
+        if (!(error instanceof ServiceUnavailableException)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private getBackoffMs(attempt: number): number {
+        return 300 * attempt * attempt;
+    }
+
+    private delay(ms: number): Promise<void> {
+        return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    private extractRetryAfter(errorResponse: GeminiErrorResponse): number | null {
+        var retryInfo = errorResponse.error?.details?.find((detail) =>
+            detail["@type"] === "type.googleapis.com/google.rpc.RetryInfo"
+        );
+
+        var retryDelay = retryInfo?.retryDelay;
+
+        if (!retryDelay) {
+            return null;
+        }
+
+        var match = retryDelay.match(/^(\d+)s$/);
+
+        if (!match) {
+            return null;
+        }
+
+        return Number(match[1]);
     }
 }

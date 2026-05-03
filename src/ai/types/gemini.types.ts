@@ -38,5 +38,9 @@ export type GeminiErrorResponse = {
         code?: number;
         message?: string;
         status?: string;
+        details?: Array<{
+            "@type"?: string;
+            retryDelay?: string;
+        }>;
     };
 };

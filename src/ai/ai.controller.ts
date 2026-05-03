@@ -6,6 +6,7 @@ import {
     , HttpStatus
     , Param
     , Post
+    , UseGuards
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOkResponse, ApiTags } from "@nestjs/swagger";
 import { AiService } from "./ai.service";
@@ -14,9 +15,11 @@ import { AnalyzeArticleDto } from "./dto/analyze-article.dto";
 import { GenerateDto } from "./dto/generate.dto";
 import { SummarizeArticleDto } from "./dto/summarize-article.dto";
 import { TranslateArticleDto } from "./dto/translate-article.dto";
+import { AiRateLimitGuard } from "./ai-rate-limit.guard";
 
 @ApiTags("ai")
 @ApiBearerAuth()
+@UseGuards(AiRateLimitGuard)
 @Controller("ai")
 export class AiController {
     constructor(private readonly aiService: AiService) { }
