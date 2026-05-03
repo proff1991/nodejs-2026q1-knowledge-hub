@@ -16,10 +16,11 @@ import {
 import {
     AnalyzeArticleResponse
     , GenerateAiResponse
-    , ParsedAnalyzeArticleResponse
     , SummarizeArticleResponse
     , TranslateArticleResponse
 } from "./types/ai.types";
+import { AiObservabilityService } from "./ai-observability.service";
+import { validateAnalyzeResponse } from "./validators/analyze-response.validator";
 
 @Injectable()
 export class AiService {
@@ -28,140 +29,149 @@ export class AiService {
         private readonly articleService: ArticleService,
         private readonly aiCacheService: AiCacheService,
         private readonly aiUsageService: AiUsageService,
+        private readonly aiObservabilityService: AiObservabilityService,
     ) { }
 
     async generate(generateDto: GenerateDto): Promise<GenerateAiResponse> {
-        this.aiUsageService.trackRequest("generate");
+        return this.trackOperation("generate", async () => {
+            this.aiUsageService.trackRequest("generate");
 
-        var result = await this.geminiService.generateText(
-            buildGenericPrompt(generateDto.prompt),
-            {
-                maxOutputTokens: generateDto.maxOutputTokens,
-                temperature: generateDto.temperature,
-            },
-        );
+            var result = await this.geminiService.generateText(
+                buildGenericPrompt(generateDto.prompt),
+                {
+                    maxOutputTokens: generateDto.maxOutputTokens,
+                    temperature: generateDto.temperature,
+                },
+            );
 
-        this.aiUsageService.trackTokens(result.usageMetadata);
+            this.aiUsageService.trackTokens(result.usageMetadata);
 
-        return {
-            text: result.text,
-            model: result.model,
-        };
+            return {
+                text: result.text,
+                model: result.model,
+            };
+        });
     }
 
     async summarizeArticle(
         articleId: string,
         summarizeArticleDto: SummarizeArticleDto,
     ): Promise<SummarizeArticleResponse> {
-        this.aiUsageService.trackRequest("summarize");
+        return this.trackOperation("summarize", async () => {
+            this.aiUsageService.trackRequest("summarize");
 
-        var article = await this.articleService.findOne(articleId);
-        var maxLength = summarizeArticleDto.maxLength ?? "medium";
-        var cacheKey = this.aiCacheService.createKey([
-            "summarize",
-            article.id,
-            article.updatedAt,
-            maxLength,
-        ]);
+            var article = await this.articleService.findOne(articleId);
+            var maxLength = summarizeArticleDto.maxLength ?? "medium";
+            var cacheKey = this.aiCacheService.createKey([
+                "summarize",
+                article.id,
+                article.updatedAt,
+                maxLength,
+            ]);
 
-        var cachedResponse = this.aiCacheService.get<SummarizeArticleResponse>(cacheKey);
+            var cachedResponse = this.aiCacheService.get<SummarizeArticleResponse>(cacheKey);
 
-        if (cachedResponse) {
-            return cachedResponse;
-        }
+            if (cachedResponse) {
+                return cachedResponse;
+            }
 
-        var result = await this.geminiService.generateText(
-            buildSummarizeArticlePrompt(article.title, article.content, maxLength),
-            {
-                maxOutputTokens: this.getSummaryTokenLimit(maxLength),
-                temperature: 0.3,
-            },
-        );
+            var result = await this.geminiService.generateText(
+                buildSummarizeArticlePrompt(article.title, article.content, maxLength),
+                {
+                    maxOutputTokens: this.getSummaryTokenLimit(maxLength),
+                    temperature: 0.3,
+                },
+            );
 
-        this.aiUsageService.trackTokens(result.usageMetadata);
+            this.aiUsageService.trackTokens(result.usageMetadata);
 
-        var response: SummarizeArticleResponse = {
-            articleId: article.id,
-            summary: result.text,
-            originalLength: article.content.length,
-            summaryLength: result.text.length,
-        };
+            var response: SummarizeArticleResponse = {
+                articleId: article.id,
+                summary: result.text,
+                originalLength: article.content.length,
+                summaryLength: result.text.length,
+            };
 
-        this.aiCacheService.set(cacheKey, response);
+            this.aiCacheService.set(cacheKey, response);
 
-        return response;
+            return response;
+        });
     }
 
     async translateArticle(
         articleId: string,
         translateArticleDto: TranslateArticleDto,
     ): Promise<TranslateArticleResponse> {
-        this.aiUsageService.trackRequest("translate");
+        return this.trackOperation("translate", async () => {
+            this.aiUsageService.trackRequest("translate");
 
-        var article = await this.articleService.findOne(articleId);
-        var cacheKey = this.aiCacheService.createKey([
-            "translate",
-            article.id,
-            article.updatedAt,
-            translateArticleDto.targetLanguage,
-            translateArticleDto.sourceLanguage ?? "auto",
-        ]);
-
-        var cachedResponse = this.aiCacheService.get<TranslateArticleResponse>(cacheKey);
-
-        if (cachedResponse) {
-            return cachedResponse;
-        }
-
-        var result = await this.geminiService.generateText(
-            buildTranslateArticlePrompt(
-                article.title,
-                article.content,
+            var article = await this.articleService.findOne(articleId);
+            var cacheKey = this.aiCacheService.createKey([
+                "translate",
+                article.id,
+                article.updatedAt,
                 translateArticleDto.targetLanguage,
-                translateArticleDto.sourceLanguage,
-            ),
-            {
-                maxOutputTokens: 4096,
-                temperature: 0.2,
-            },
-        );
+                translateArticleDto.sourceLanguage ?? "auto",
+            ]);
 
-        this.aiUsageService.trackTokens(result.usageMetadata);
+            var cachedResponse = this.aiCacheService.get<TranslateArticleResponse>(cacheKey);
 
-        var response: TranslateArticleResponse = {
-            articleId: article.id,
-            translatedText: result.text,
-            detectedLanguage: translateArticleDto.sourceLanguage ?? "auto",
-        };
+            if (cachedResponse) {
+                return cachedResponse;
+            }
 
-        this.aiCacheService.set(cacheKey, response);
+            var result = await this.geminiService.generateText(
+                buildTranslateArticlePrompt(
+                    article.title,
+                    article.content,
+                    translateArticleDto.targetLanguage,
+                    translateArticleDto.sourceLanguage,
+                ),
+                {
+                    maxOutputTokens: 4096,
+                    temperature: 0.2,
+                },
+            );
 
-        return response;
+            this.aiUsageService.trackTokens(result.usageMetadata);
+
+            var response: TranslateArticleResponse = {
+                articleId: article.id,
+                translatedText: result.text,
+                detectedLanguage: translateArticleDto.sourceLanguage ?? "auto",
+            };
+
+            this.aiCacheService.set(cacheKey, response);
+
+            return response;
+        });
     }
 
     async analyzeArticle(
         articleId: string,
         analyzeArticleDto: AnalyzeArticleDto,
     ): Promise<AnalyzeArticleResponse> {
-        this.aiUsageService.trackRequest("analyze");
+        return this.trackOperation("analyze", async () => {
+            this.aiUsageService.trackRequest("analyze");
 
-        var article = await this.articleService.findOne(articleId);
-        var task = analyzeArticleDto.task ?? "review";
+            var article = await this.articleService.findOne(articleId);
+            var task = analyzeArticleDto.task ?? "review";
 
-        var result = await this.geminiService.generateText(
-            buildAnalyzeArticlePrompt(article.title, article.content, task),
-            {
-                maxOutputTokens: 2048,
-                temperature: 0.2,
-            },
-        );
+            var result = await this.geminiService.generateText(
+                buildAnalyzeArticlePrompt(article.title, article.content, task),
+                {
+                    maxOutputTokens: 2048,
+                    temperature: 0.2,
+                },
+            );
 
-        this.aiUsageService.trackTokens(result.usageMetadata);
+            this.aiUsageService.trackTokens(result.usageMetadata);
 
-        return {
-            articleId: article.id,
-            ...this.parseAnalyzeResponse(result.text),
-        };
+            return {
+                articleId: article.id,
+                ...validateAnalyzeResponse(result.text),
+            };
+        });
     }
 
     getUsageStats() {
@@ -169,6 +179,36 @@ export class AiService {
             usage: this.aiUsageService.getStats(),
             cache: this.aiCacheService.getStats(),
         };
+    }
+
+    getDiagnostics() {
+        return {
+            model: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
+            baseUrl: process.env.GEMINI_API_BASE_URL ?? "https://generativelanguage.googleapis.com",
+            hasApiKey: Boolean(process.env.GEMINI_API_KEY),
+            rateLimitRpm: Number(process.env.AI_RATE_LIMIT_RPM ?? 20),
+            cache: this.aiCacheService.getStats(),
+            usage: this.aiUsageService.getStats(),
+            observability: this.aiObservabilityService.getStats(),
+        };
+    }
+
+    private async trackOperation<T>(
+        endpoint: "generate" | "summarize" | "translate" | "analyze",
+        operation: () => Promise<T>,
+    ): Promise<T> {
+        var startedAt = Date.now();
+
+        try {
+            var result = await operation();
+            this.aiObservabilityService.trackLatency(endpoint, Date.now() - startedAt, true);
+
+            return result;
+        } catch (error) {
+            this.aiObservabilityService.trackLatency(endpoint, Date.now() - startedAt, false);
+
+            throw error;
+        }
     }
 
     private getSummaryTokenLimit(maxLength: "short" | "medium" | "detailed"): number {
@@ -183,47 +223,4 @@ export class AiService {
         return 512;
     }
 
-    private parseAnalyzeResponse(rawText: string): Omit<AnalyzeArticleResponse, "articleId"> {
-        try {
-            var parsed = JSON.parse(this.stripJsonFence(rawText)) as ParsedAnalyzeArticleResponse;
-            var analysis = typeof parsed.analysis === "string" ? parsed.analysis : rawText;
-            var suggestions = Array.isArray(parsed.suggestions)
-                ? parsed.suggestions.filter((suggestion) => typeof suggestion === "string")
-                : [];
-            var severity = this.normalizeSeverity(parsed.severity);
-
-            return {
-                analysis,
-                suggestions,
-                severity,
-            };
-        } catch (error) {
-            return {
-                analysis: rawText,
-                suggestions: [],
-                severity: "info",
-            };
-        }
-    }
-
-    private stripJsonFence(rawText: string): string {
-        return rawText
-            .trim()
-            .replace(/^```json\s*/i, "")
-            .replace(/^```\s*/i, "")
-            .replace(/\s*```$/i, "")
-            .trim();
-    }
-
-    private normalizeSeverity(severity: unknown): "info" | "warning" | "error" {
-        if (severity === "warning") {
-            return "warning";
-        }
-
-        if (severity === "error") {
-            return "error";
-        }
-
-        return "info";
-    }
 }

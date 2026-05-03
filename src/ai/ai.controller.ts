@@ -61,6 +61,12 @@ export class AiController {
         return this.aiService.analyzeArticle(params.articleId, analyzeArticleDto);
     }
 
+    @Get("diagnostics")
+    @ApiOkResponse({ description: "AI diagnostics without secrets" })
+    getDiagnostics() {
+        return this.aiService.getDiagnostics();
+    }
+
     @Get("usage")
     @ApiOkResponse({ description: "AI usage statistics since service startup" })
     getUsageStats() {
