@@ -26,7 +26,8 @@ import { RagSearchService } from "./rag-search.service";
         , RagSearchService
         , RagChatService
         , QdrantVectorStoreService
-    ], exports: [
+    ]
+    , exports: [
         RagConfigService
         , RagChunkingService
         , RagConversationMemoryService

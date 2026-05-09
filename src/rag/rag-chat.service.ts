@@ -18,7 +18,7 @@ export class RagChatService {
     constructor(
         private readonly geminiService: GeminiService
         , private readonly ragSearchService: RagSearchService
-        , private readonly memoryService: RagConversationMemoryService,
+        , private readonly memoryService: RagConversationMemoryService
     ) { }
 
     async chat(request: RagChatRequestDto): Promise<RagChatResponse> {
@@ -89,8 +89,8 @@ export class RagChatService {
             , ""
             , "Conversation history:"
             , this.formatHistory(history)
-            , "",
-            "Knowledge Hub context:"
+            , ""
+            , "Knowledge Hub context:"
             , this.formatContext(results)
             , ""
             , "User question:"
