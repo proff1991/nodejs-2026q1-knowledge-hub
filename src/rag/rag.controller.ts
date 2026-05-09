@@ -1,8 +1,10 @@
 import {
     Body
     , Controller
+    , Get
     , HttpCode
     , HttpStatus
+    , Param
     , Post
 } from "@nestjs/common";
 import {
@@ -10,9 +12,11 @@ import {
     , ApiOkResponse
     , ApiTags
 } from "@nestjs/swagger";
-import { ReindexRequestDto } from "./dto/reindex-request.dto";
-import { RagIndexService } from "./rag-index.service";
+import { RagChatRequestDto } from "./dto/rag-chat-request.dto";
 import { RagSearchRequestDto } from "./dto/rag-search-request.dto";
+import { ReindexRequestDto } from "./dto/reindex-request.dto";
+import { RagChatService } from "./rag-chat.service";
+import { RagIndexService } from "./rag-index.service";
 import { RagSearchService } from "./rag-search.service";
 
 @ApiTags("ai-rag")
@@ -22,6 +26,7 @@ export class RagController {
     constructor(
         private readonly ragIndexService: RagIndexService
         , private readonly ragSearchService: RagSearchService
+        , private readonly ragChatService: RagChatService
     ) { }
 
     @Post("index")
@@ -36,5 +41,18 @@ export class RagController {
     @ApiOkResponse({ description: "Semantic search results from Knowledge Hub vector index" })
     search(@Body() ragSearchRequestDto: RagSearchRequestDto) {
         return this.ragSearchService.search(ragSearchRequestDto);
+    }
+
+    @Post("chat")
+    @HttpCode(HttpStatus.OK)
+    @ApiOkResponse({ description: "Grounded RAG answer with Knowledge Hub sources" })
+    chat(@Body() ragChatRequestDto: RagChatRequestDto) {
+        return this.ragChatService.chat(ragChatRequestDto);
+    }
+
+    @Get("chat/:conversationId/history")
+    @ApiOkResponse({ description: "RAG conversation history" })
+    getChatHistory(@Param("conversationId") conversationId: string) {
+        return this.ragChatService.getHistory(conversationId);
     }
 }

@@ -3,9 +3,11 @@ import { AiModule } from "../ai/ai.module";
 import { LoggerModule } from "../common/logger/logger.module";
 import { PrismaModule } from "../prisma/prisma.module";
 import { QdrantVectorStoreService } from "./qdrant-vector-store.service";
+import { RagChatService } from "./rag-chat.service";
 import { RagChunkingService } from "./rag-chunking.service";
 import { RagConfigService } from "./rag-config.service";
 import { RagController } from "./rag.controller";
+import { RagConversationMemoryService } from "./rag-conversation-memory.service";
 import { RagIndexService } from "./rag-index.service";
 import { RagSearchService } from "./rag-search.service";
 
@@ -14,21 +16,24 @@ import { RagSearchService } from "./rag-search.service";
         AiModule
         , LoggerModule
         , PrismaModule
-    ],
-    controllers: [RagController],
-    providers: [
+    ]
+    , controllers: [RagController]
+    , providers: [
         RagConfigService
         , RagChunkingService
+        , RagConversationMemoryService
         , RagIndexService
         , RagSearchService
+        , RagChatService
         , QdrantVectorStoreService
-    ],
-    exports: [
+    ], exports: [
         RagConfigService
         , RagChunkingService
+        , RagConversationMemoryService
         , RagIndexService
         , RagSearchService
+        , RagChatService
         , QdrantVectorStoreService
-    ],
+    ]
 })
 export class RagModule { }
