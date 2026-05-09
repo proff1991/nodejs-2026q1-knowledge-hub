@@ -7,25 +7,28 @@ import { RagChunkingService } from "./rag-chunking.service";
 import { RagConfigService } from "./rag-config.service";
 import { RagController } from "./rag.controller";
 import { RagIndexService } from "./rag-index.service";
+import { RagSearchService } from "./rag-search.service";
 
 @Module({
     imports: [
-        AiModule,
-        LoggerModule,
-        PrismaModule,
+        AiModule
+        , LoggerModule
+        , PrismaModule
     ],
     controllers: [RagController],
     providers: [
-        RagConfigService,
-        RagChunkingService,
-        RagIndexService,
-        QdrantVectorStoreService,
+        RagConfigService
+        , RagChunkingService
+        , RagIndexService
+        , RagSearchService
+        , QdrantVectorStoreService
     ],
     exports: [
-        RagConfigService,
-        RagChunkingService,
-        RagIndexService,
-        QdrantVectorStoreService,
+        RagConfigService
+        , RagChunkingService
+        , RagIndexService
+        , RagSearchService
+        , QdrantVectorStoreService
     ],
 })
 export class RagModule { }
