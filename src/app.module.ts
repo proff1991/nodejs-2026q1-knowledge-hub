@@ -9,9 +9,10 @@ import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { LoggerModule } from './common/logger/logger.module';
 import { AiModule } from "./ai/ai.module";
+import { RagModule } from "./rag/rag.module";
 
 @Module({
-  imports: [PrismaModule, UserModule, CategoryModule, ArticleModule, CommentModule, AuthModule, LoggerModule, AiModule],
+  imports: [PrismaModule, UserModule, CategoryModule, ArticleModule, CommentModule, AuthModule, LoggerModule, AiModule, RagModule],
   controllers: [AppController],
   providers: [AppService],
 })
