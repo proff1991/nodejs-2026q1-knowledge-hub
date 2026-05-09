@@ -9,18 +9,18 @@ import {
 
 export class ReindexRequestDto {
     @ApiPropertyOptional({
-        example: true,
-        default: true,
-        description: "Index only published articles by default",
+        example: true
+        , default: true
+        , description: "Index only published articles by default"
     })
     @IsOptional()
     @IsBoolean()
     onlyPublished?: boolean;
 
     @ApiPropertyOptional({
-        example: ["550e8400-e29b-41d4-a716-446655440000"],
-        description: "Optional list of article IDs for selective reindex",
-        type: [String],
+        example: ["550e8400-e29b-41d4-a716-446655440000"]
+        , description: "Optional list of article IDs for selective reindex"
+        , type: [String]
     })
     @IsOptional()
     @IsArray()

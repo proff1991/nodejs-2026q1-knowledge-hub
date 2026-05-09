@@ -19,12 +19,12 @@ export class RagIndexService {
     private readonly embeddingBatchSize = 50;
 
     constructor(
-        private readonly prisma: PrismaService,
-        private readonly geminiService: GeminiService,
-        private readonly chunkingService: RagChunkingService,
-        private readonly vectorStore: QdrantVectorStoreService,
-        private readonly config: RagConfigService,
-        private readonly logger: AppLoggerService,
+        private readonly prisma: PrismaService
+        , private readonly geminiService: GeminiService
+        , private readonly chunkingService: RagChunkingService
+        , private readonly vectorStore: QdrantVectorStoreService
+        , private readonly config: RagConfigService
+        , private readonly logger: AppLoggerService
     ) { }
 
     async reindex(request: ReindexRequestDto): Promise<RagIndexResponse> {
@@ -35,9 +35,9 @@ export class RagIndexService {
 
         if (chunks.length === 0) {
             return {
-                indexedArticles: articles.length,
-                indexedChunks: 0,
-                vectorCollection: this.config.getVectorCollection(),
+                indexedArticles: articles.length
+                , indexedChunks: 0
+                , vectorCollection: this.config.getVectorCollection()
             };
         }
 
@@ -50,15 +50,15 @@ export class RagIndexService {
         await this.vectorStore.upsertPoints(this.createPoints(chunks, embeddings));
 
         this.logger.log("RAG index refreshed", "RagIndexService", {
-            indexedArticles: articles.length,
-            indexedChunks: chunks.length,
-            vectorCollection: this.config.getVectorCollection(),
+            indexedArticles: articles.length
+            , indexedChunks: chunks.length
+            , vectorCollection: this.config.getVectorCollection(),
         });
 
         return {
-            indexedArticles: articles.length,
-            indexedChunks: chunks.length,
-            vectorCollection: this.config.getVectorCollection(),
+            indexedArticles: articles.length
+            , indexedChunks: chunks.length
+            , vectorCollection: this.config.getVectorCollection()
         };
     }
 
@@ -77,30 +77,30 @@ export class RagIndexService {
                         },
                     }
                     : {}),
-            },
-            include: {
+            }
+            , include: {
                 tags: {
                     select: {
                         name: true,
                     },
                 },
-            },
-            orderBy: {
+            }
+            , orderBy: {
                 updatedAt: "asc",
-            },
+            }
         });
     }
 
     private createChunks(articles: RagIndexArticle[]): RagArticleChunk[] {
         return articles.flatMap((article) =>
             this.chunkingService.createArticleChunks({
-                articleId: article.id,
-                articleTitle: article.title,
-                articleContent: article.content,
-                articleStatus: article.status.toLowerCase(),
-                categoryId: article.categoryId,
-                tags: article.tags.map((tag) => tag.name),
-                updatedAt: article.updatedAt.getTime(),
+                articleId: article.id
+                , articleTitle: article.title
+                , articleContent: article.content
+                , articleStatus: article.status.toLowerCase()
+                , categoryId: article.categoryId
+                , tags: article.tags.map((tag) => tag.name)
+                , updatedAt: article.updatedAt.getTime()
             }),
         );
     }
@@ -117,10 +117,10 @@ export class RagIndexService {
         for (var index = 0; index < chunks.length; index += this.embeddingBatchSize) {
             var chunkBatch = chunks.slice(index, index + this.embeddingBatchSize);
             var batchEmbeddings = await this.geminiService.embedTexts(
-                chunkBatch.map((chunk) => chunk.chunk),
-                {
-                    taskType: "RETRIEVAL_DOCUMENT",
-                },
+                chunkBatch.map((chunk) => chunk.chunk)
+                , {
+                    taskType: "RETRIEVAL_DOCUMENT"
+                }
             );
 
             embeddings.push(...batchEmbeddings);
@@ -131,18 +131,18 @@ export class RagIndexService {
 
     private createPoints(chunks: RagArticleChunk[], embeddings: Awaited<ReturnType<GeminiService["embedTexts"]>>): QdrantPoint[] {
         return chunks.map((chunk, index) => ({
-            id: this.createPointId(chunk.articleId, chunk.chunkIndex),
-            vector: embeddings[index].values,
-            payload: {
-                articleId: chunk.articleId,
-                articleTitle: chunk.articleTitle,
-                articleStatus: chunk.articleStatus,
-                categoryId: chunk.categoryId,
-                tags: chunk.tags,
-                chunkIndex: chunk.chunkIndex,
-                chunk: chunk.chunk,
-                updatedAt: chunk.updatedAt,
-            },
+            id: this.createPointId(chunk.articleId, chunk.chunkIndex)
+            , vector: embeddings[index].values
+            , payload: {
+                articleId: chunk.articleId
+                , articleTitle: chunk.articleTitle
+                , articleStatus: chunk.articleStatus
+                , categoryId: chunk.categoryId
+                , tags: chunk.tags
+                , chunkIndex: chunk.chunkIndex
+                , chunk: chunk.chunk
+                , updatedAt: chunk.updatedAt
+            }
         }));
     }
 
@@ -159,11 +159,11 @@ export class RagIndexService {
         var uuid = hash.join("");
 
         return [
-            uuid.slice(0, 8),
-            uuid.slice(8, 12),
-            uuid.slice(12, 16),
-            uuid.slice(16, 20),
-            uuid.slice(20, 32),
+            uuid.slice(0, 8)
+            , uuid.slice(8, 12)
+            , uuid.slice(12, 16)
+            , uuid.slice(16, 20)
+            , uuid.slice(20, 32)
         ].join("-");
     }
 }

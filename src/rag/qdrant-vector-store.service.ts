@@ -49,29 +49,29 @@ export class QdrantVectorStoreService {
         var collectionName = this.config.getVectorCollection();
 
         await this.request(
-            "PUT",
-            `/collections/${encodeURIComponent(collectionName)}/points?wait=true`,
-            {
+            "PUT"
+            , `/collections/${encodeURIComponent(collectionName)}/points?wait=true`
+            , {
                 points,
-            },
+            }
         );
     }
 
     async search(
-        vector: number[],
-        limit: number,
-        filter?: QdrantFilter,
+        vector: number[]
+        , limit: number
+        , filter?: QdrantFilter
     ): Promise<QdrantSearchResultItem[]> {
         var collectionName = this.config.getVectorCollection();
         var responseData = await this.request(
-            "POST",
-            `/collections/${encodeURIComponent(collectionName)}/points/search`,
-            {
+            "POST"
+            , `/collections/${encodeURIComponent(collectionName)}/points/search`
+            , {
                 vector,
                 limit,
                 with_payload: true,
                 ...(typeof filter !== "undefined" ? { filter } : {}),
-            },
+            }
         ) as QdrantSearchResponse;
 
         return responseData.result ?? [];
@@ -80,11 +80,11 @@ export class QdrantVectorStoreService {
     async countByArticleId(articleId: string): Promise<number> {
         var collectionName = this.config.getVectorCollection();
         var responseData = await this.request(
-            "POST",
-            `/collections/${encodeURIComponent(collectionName)}/points/count`,
-            {
-                exact: true,
-                filter: this.createArticleFilter(articleId),
+            "POST"
+            , `/collections/${encodeURIComponent(collectionName)}/points/count`
+            , {
+                exact: true
+                , filter: this.createArticleFilter(articleId)
             },
         ) as QdrantCountResponse;
 
@@ -101,11 +101,11 @@ export class QdrantVectorStoreService {
         var collectionName = this.config.getVectorCollection();
 
         await this.request(
-            "POST",
-            `/collections/${encodeURIComponent(collectionName)}/points/delete?wait=true`,
-            {
-                filter: this.createArticleFilter(articleId),
-            },
+            "POST"
+            , `/collections/${encodeURIComponent(collectionName)}/points/delete?wait=true`
+            , {
+                filter: this.createArticleFilter(articleId)
+            }
         );
 
         return existingCount;
@@ -129,33 +129,33 @@ export class QdrantVectorStoreService {
         return {
             must: [
                 {
-                    key: "articleId",
-                    match: {
-                        value: articleId,
-                    },
-                },
-            ],
+                    key: "articleId"
+                    , match: {
+                        value: articleId
+                    }
+                }
+            ]
         };
     }
 
     private async request(
-        method: string,
-        path: string,
-        body?: unknown,
+        method: string
+        , path: string
+        , body?: unknown
     ): Promise<unknown> {
         var controller = new AbortController();
         var timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
 
         try {
             var response = await fetch(`${this.config.getVectorDbUrl()}${path}`, {
-                method,
-                headers: {
-                    "Content-Type": "application/json",
+                method
+                , headers: {
+                    "Content-Type": "application/json"
                 },
                 ...(typeof body !== "undefined"
                     ? { body: JSON.stringify(body) }
                     : {}),
-                signal: controller.signal,
+                signal: controller.signal
             });
 
             var responseData = await this.readResponse(response);
@@ -172,13 +172,13 @@ export class QdrantVectorStoreService {
         } catch (error) {
             if (error instanceof ServiceUnavailableException) {
                 this.logger.error(
-                    "Vector database request failed",
-                    undefined,
-                    "QdrantVectorStoreService",
-                    {
+                    "Vector database request failed"
+                    , undefined
+                    , "QdrantVectorStoreService"
+                    , {
                         path,
                         error: error.message,
-                    },
+                    }
                 );
 
                 throw error;
@@ -187,13 +187,13 @@ export class QdrantVectorStoreService {
             var message = error instanceof Error ? error.message : "Unknown vector DB error";
 
             this.logger.error(
-                "Vector database is unavailable",
-                undefined,
-                "QdrantVectorStoreService",
-                {
-                    path,
-                    error: message,
-                },
+                "Vector database is unavailable"
+                , undefined,
+                "QdrantVectorStoreService"
+                , {
+                    path
+                    , error: message
+                }
             );
 
             throw new ServiceUnavailableException("Vector database is unavailable");

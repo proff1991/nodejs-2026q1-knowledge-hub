@@ -22,9 +22,9 @@ export class RagSearchRequestDto {
     query!: string;
 
     @ApiPropertyOptional({
-        example: 5,
-        default: 5,
-        maximum: 20,
+        example: 5
+        , default: 5
+        , maximum: 20
     })
     @IsOptional()
     @Type(() => Number)
@@ -34,8 +34,8 @@ export class RagSearchRequestDto {
     limit?: number;
 
     @ApiPropertyOptional({
-        example: "published",
-        enum: ["draft", "published", "archived"],
+        example: "published"
+        , enum: ["draft", "published", "archived"]
     })
     @IsOptional()
     @IsString()
@@ -50,8 +50,8 @@ export class RagSearchRequestDto {
     categoryId?: string;
 
     @ApiPropertyOptional({
-        example: ["nestjs", "auth"],
-        type: [String],
+        example: ["nestjs", "auth"]
+        , type: [String]
     })
     @IsOptional()
     @IsArray()

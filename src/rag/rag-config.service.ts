@@ -31,13 +31,13 @@ export class RagConfigService {
     getChunkOverlap(): number {
         var chunkSize = this.getChunkSize();
         var chunkOverlap = this.getPositiveIntegerEnv(
-            "RAG_CHUNK_OVERLAP",
-            this.defaultChunkOverlap,
+            "RAG_CHUNK_OVERLAP"
+            , this.defaultChunkOverlap
         );
 
         if (chunkOverlap >= chunkSize) {
             throw new InternalServerErrorException(
-                "RAG_CHUNK_OVERLAP must be lower than RAG_CHUNK_SIZE",
+                "RAG_CHUNK_OVERLAP must be lower than RAG_CHUNK_SIZE"
             );
         }
 
@@ -46,8 +46,8 @@ export class RagConfigService {
 
     getConversationMaxMessages(): number {
         return this.getPositiveIntegerEnv(
-            "RAG_CONVERSATION_MAX_MESSAGES",
-            this.defaultConversationMaxMessages,
+            "RAG_CONVERSATION_MAX_MESSAGES"
+            , this.defaultConversationMaxMessages
         );
     }
 

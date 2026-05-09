@@ -15,20 +15,20 @@ export class RagSearchService {
     private readonly maxLimit = 20;
 
     constructor(
-        private readonly geminiService: GeminiService,
-        private readonly vectorStore: QdrantVectorStoreService,
+        private readonly geminiService: GeminiService
+        , private readonly vectorStore: QdrantVectorStoreService
     ) { }
 
     async search(request: RagSearchRequestDto): Promise<RagSearchResponse> {
         var limit = this.normalizeLimit(request.limit);
         var queryEmbedding = await this.geminiService.embedText(request.query, {
-            taskType: "RETRIEVAL_QUERY",
+            taskType: "RETRIEVAL_QUERY"
         });
 
         var searchResults = await this.vectorStore.search(
-            queryEmbedding.values,
-            limit,
-            this.createFilter(request),
+            queryEmbedding.values
+            , limit
+            , this.createFilter(request)
         );
 
         return {
@@ -36,10 +36,10 @@ export class RagSearchService {
                 var payload = result.payload as RagSearchPayload | undefined;
 
                 return {
-                    articleId: this.getStringPayloadValue(payload, "articleId"),
-                    articleTitle: this.getStringPayloadValue(payload, "articleTitle"),
-                    chunk: this.getStringPayloadValue(payload, "chunk"),
-                    similarity: result.score,
+                    articleId: this.getStringPayloadValue(payload, "articleId")
+                    , articleTitle: this.getStringPayloadValue(payload, "articleTitle")
+                    , chunk: this.getStringPayloadValue(payload, "chunk")
+                    , similarity: result.score,
                 };
             }),
         };
@@ -58,28 +58,28 @@ export class RagSearchService {
 
         if (typeof request.articleStatus !== "undefined") {
             must.push({
-                key: "articleStatus",
-                match: {
-                    value: request.articleStatus,
-                },
+                key: "articleStatus"
+                , match: {
+                    value: request.articleStatus
+                }
             });
         }
 
         if (typeof request.categoryId !== "undefined") {
             must.push({
-                key: "categoryId",
-                match: {
-                    value: request.categoryId,
-                },
+                key: "categoryId"
+                , match: {
+                    value: request.categoryId
+                }
             });
         }
 
         if (typeof request.tags !== "undefined" && request.tags.length > 0) {
             must.push({
-                key: "tags",
-                match: {
-                    any: request.tags,
-                },
+                key: "tags"
+                , match: {
+                    any: request.tags
+                }
             });
         }
 

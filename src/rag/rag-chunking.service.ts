@@ -22,22 +22,22 @@ export class RagChunkingService {
         var chunks = this.splitText(normalizedText, chunkSize, chunkOverlap);
 
         return chunks.map((chunk, index) => ({
-            articleId: article.articleId,
-            articleTitle: article.articleTitle,
-            articleStatus: article.articleStatus,
-            categoryId: article.categoryId,
-            tags: article.tags,
-            chunkIndex: index,
-            chunk,
-            updatedAt: article.updatedAt,
+            articleId: article.articleId
+            , articleTitle: article.articleTitle
+            , articleStatus: article.articleStatus
+            , categoryId: article.categoryId
+            , tags: article.tags
+            , chunkIndex: index
+            , chunk
+            , updatedAt: article.updatedAt
         }));
     }
 
     private createArticleText(article: RagArticleChunkSource): string {
         return [
-            `Title: ${article.articleTitle}`,
-            "",
-            article.articleContent,
+            `Title: ${article.articleTitle}`
+            , ""
+            , article.articleContent
         ].join("\n");
     }
 
