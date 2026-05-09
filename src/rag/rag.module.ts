@@ -1,20 +1,31 @@
 import { Module } from "@nestjs/common";
+import { AiModule } from "../ai/ai.module";
 import { LoggerModule } from "../common/logger/logger.module";
+import { PrismaModule } from "../prisma/prisma.module";
 import { QdrantVectorStoreService } from "./qdrant-vector-store.service";
-import { RagConfigService } from "./rag-config.service";
 import { RagChunkingService } from "./rag-chunking.service";
+import { RagConfigService } from "./rag-config.service";
+import { RagController } from "./rag.controller";
+import { RagIndexService } from "./rag-index.service";
 
 @Module({
-    imports: [LoggerModule],
+    imports: [
+        AiModule,
+        LoggerModule,
+        PrismaModule,
+    ],
+    controllers: [RagController],
     providers: [
-        RagConfigService
-        , RagChunkingService
-        , QdrantVectorStoreService
+        RagConfigService,
+        RagChunkingService,
+        RagIndexService,
+        QdrantVectorStoreService,
     ],
     exports: [
-        RagConfigService
-        , RagChunkingService
-        , QdrantVectorStoreService
+        RagConfigService,
+        RagChunkingService,
+        RagIndexService,
+        QdrantVectorStoreService,
     ],
 })
 export class RagModule { }
