@@ -8,13 +8,26 @@ import {
     QdrantCountResponse
     , QdrantFilter
     , QdrantPoint
+    , QdrantPointPayload
+    , QdrantScrollOffset
+    , QdrantScrollResponse
     , QdrantSearchResponse
     , QdrantSearchResultItem
+    , QdrantStoredPoint
 } from "./types/qdrant.types";
+
+export type QdrantIndexedArticleSummary = {
+    articleId: string;
+    updatedAt: number;
+    chunkSize: number | null;
+    chunkOverlap: number | null;
+    chunksCount: number;
+};
 
 @Injectable()
 export class QdrantVectorStoreService {
     private readonly requestTimeoutMs = 10000;
+    private readonly scrollBatchSize = 100;
 
     constructor(
         private readonly config: RagConfigService,
@@ -91,7 +104,94 @@ export class QdrantVectorStoreService {
         return responseData.result ?? [];
     }
 
+    async getIndexedArticleSummaries(filter?: QdrantFilter): Promise<QdrantIndexedArticleSummary[]> {
+        var exists = await this.collectionExists(this.config.getVectorCollection());
+
+        if (!exists) {
+            return [];
+        }
+
+        var points = await this.scrollPayloads(filter);
+        var summaryMap = new Map<string, QdrantIndexedArticleSummary>();
+
+        for (var point of points) {
+            var payload = point.payload ?? {};
+            var articleId = this.getStringPayloadValue(payload, "articleId");
+
+            if (!articleId) {
+                continue;
+            }
+
+            var updatedAt = this.getNumberPayloadValue(payload, "updatedAt");
+            var chunkSize = this.getNullableNumberPayloadValue(payload, "chunkSize");
+            var chunkOverlap = this.getNullableNumberPayloadValue(payload, "chunkOverlap");
+            var existing = summaryMap.get(articleId);
+
+            if (typeof existing === "undefined") {
+                summaryMap.set(articleId, {
+                    articleId
+                    , updatedAt
+                    , chunkSize
+                    , chunkOverlap
+                    , chunksCount: 1
+                });
+
+                continue;
+            }
+
+            existing.updatedAt = Math.max(existing.updatedAt, updatedAt);
+            existing.chunksCount += 1;
+
+            if (existing.chunkSize !== chunkSize) {
+                existing.chunkSize = null;
+            }
+
+            if (existing.chunkOverlap !== chunkOverlap) {
+                existing.chunkOverlap = null;
+            }
+        }
+
+        return [...summaryMap.values()];
+    }
+
+    async scrollPayloads(filter?: QdrantFilter): Promise<QdrantStoredPoint[]> {
+        var exists = await this.collectionExists(this.config.getVectorCollection());
+
+        if (!exists) {
+            return [];
+        }
+
+        var collectionName = this.config.getVectorCollection();
+        var offset: QdrantScrollOffset | undefined = undefined;
+        var points: QdrantStoredPoint[] = [];
+
+        do {
+            var responseData = await this.request(
+                "POST"
+                , `/collections/${encodeURIComponent(collectionName)}/points/scroll`
+                , {
+                    limit: this.scrollBatchSize
+                    , with_payload: true
+                    , with_vector: false
+                    , ...(typeof filter !== "undefined" ? { filter } : {})
+                    , ...(typeof offset !== "undefined" ? { offset } : {})
+                }
+            ) as QdrantScrollResponse;
+
+            points.push(...(responseData.result?.points ?? []));
+            offset = responseData.result?.next_page_offset ?? undefined;
+        } while (typeof offset !== "undefined" && offset !== null);
+
+        return points;
+    }
+
     async countByArticleId(articleId: string): Promise<number> {
+        var exists = await this.collectionExists(this.config.getVectorCollection());
+
+        if (!exists) {
+            return 0;
+        }
+
         var collectionName = this.config.getVectorCollection();
         var responseData = await this.request(
             "POST"
@@ -148,6 +248,36 @@ export class QdrantVectorStoreService {
 
             throw error;
         }
+    }
+
+    private getStringPayloadValue(payload: QdrantPointPayload, key: string): string {
+        var value = payload[key];
+
+        if (typeof value === "string") {
+            return value;
+        }
+
+        return "";
+    }
+
+    private getNumberPayloadValue(payload: QdrantPointPayload, key: string): number {
+        var value = payload[key];
+
+        if (typeof value === "number") {
+            return value;
+        }
+
+        return 0;
+    }
+
+    private getNullableNumberPayloadValue(payload: QdrantPointPayload, key: string): number | null {
+        var value = payload[key];
+
+        if (typeof value === "number") {
+            return value;
+        }
+
+        return null;
     }
 
     private createArticleFilter(articleId: string): QdrantFilter {

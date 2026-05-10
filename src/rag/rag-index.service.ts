@@ -6,7 +6,10 @@ import { createHash } from "node:crypto";
 import { GeminiService } from "../ai/gemini.service";
 import { AppLoggerService } from "../common/logger/app-logger.service";
 import { PrismaService } from "../prisma/prisma.service";
-import { QdrantVectorStoreService } from "./qdrant-vector-store.service";
+import {
+    QdrantIndexedArticleSummary
+    , QdrantVectorStoreService
+} from "./qdrant-vector-store.service";
 import { RagChunkingService } from "./rag-chunking.service";
 import { RagConfigService } from "./rag-config.service";
 import { ReindexRequestDto } from "./dto/reindex-request.dto";
@@ -15,7 +18,10 @@ import {
     RagIndexArticle
     , RagIndexResponse
 } from "./types/rag-index.types";
-import { QdrantPoint } from "./types/qdrant.types";
+import {
+    QdrantFilter
+    , QdrantPoint
+} from "./types/qdrant.types";
 
 @Injectable()
 export class RagIndexService {
@@ -31,6 +37,30 @@ export class RagIndexService {
     ) { }
 
     async reindex(request: ReindexRequestDto): Promise<RagIndexResponse> {
+        if (request.incremental === true) {
+            return this.reindexIncrementally(request);
+        }
+
+        return this.reindexFullyOrSelectively(request);
+    }
+
+    async deleteArticleFromIndex(articleId: string): Promise<void> {
+        await this.vectorStore.checkHealth();
+
+        var deletedCount = await this.vectorStore.deleteByArticleId(articleId);
+
+        if (deletedCount === 0) {
+            throw new NotFoundException("Article vectors were not found in RAG index");
+        }
+
+        this.logger.log("Article vectors were deleted from RAG index", "RagIndexService", {
+            articleId
+            , deletedCount
+            , vectorCollection: this.config.getVectorCollection()
+        });
+    }
+
+    private async reindexFullyOrSelectively(request: ReindexRequestDto): Promise<RagIndexResponse> {
         var articles = await this.findArticlesForIndexing(request);
         var chunks = this.createChunks(articles);
         var isSelectiveReindex = typeof request.articleIds !== "undefined";
@@ -50,6 +80,7 @@ export class RagIndexService {
                 indexedArticles: articles.length
                 , indexedChunks: 0
                 , vectorCollection: this.config.getVectorCollection()
+                , indexingMode: isSelectiveReindex ? "selective" : "full"
             };
         }
 
@@ -75,50 +106,86 @@ export class RagIndexService {
             indexedArticles: articles.length
             , indexedChunks: chunks.length
             , vectorCollection: this.config.getVectorCollection()
+            , indexingMode: isSelectiveReindex ? "selective" : "full"
         };
     }
 
-    async deleteArticleFromIndex(articleId: string): Promise<void> {
+    private async reindexIncrementally(request: ReindexRequestDto): Promise<RagIndexResponse> {
+        var articles = await this.findArticlesForIndexing(request);
+        var indexedSummaries = await this.vectorStore.getIndexedArticleSummaries(
+            this.createIndexedSummaryFilter(request.articleIds)
+        );
+        var articlesToIndex = this.findChangedArticles(articles, indexedSummaries);
+        var staleArticleIds = this.findStaleArticleIds(articles, indexedSummaries, request.articleIds);
+
         await this.vectorStore.checkHealth();
+        await this.deleteExistingArticlePointsByIds([
+            ...staleArticleIds
+            , ...articlesToIndex.map((article) => article.id)
+        ]);
 
-        var deletedCount = await this.vectorStore.deleteByArticleId(articleId);
+        var chunks = this.createChunks(articlesToIndex);
 
-        if (deletedCount === 0) {
-            throw new NotFoundException("Article vectors were not found in RAG index");
+        if (chunks.length === 0) {
+            return {
+                indexedArticles: 0
+                , indexedChunks: 0
+                , vectorCollection: this.config.getVectorCollection()
+                , skippedArticles: articles.length - articlesToIndex.length
+                , removedArticles: staleArticleIds.length
+                , indexingMode: "incremental"
+            };
         }
 
-        this.logger.log("Article vectors were deleted from RAG index", "RagIndexService", {
-            articleId
-            , deletedCount
+        var embeddings = await this.createEmbeddings(chunks);
+        var vectorSize = embeddings[0].values.length;
+
+        await this.vectorStore.ensureCollection(vectorSize);
+        await this.vectorStore.upsertPoints(this.createPoints(chunks, embeddings));
+
+        this.logger.log("RAG index refreshed incrementally", "RagIndexService", {
+            indexedArticles: articlesToIndex.length
+            , indexedChunks: chunks.length
+            , skippedArticles: articles.length - articlesToIndex.length
+            , removedArticles: staleArticleIds.length
             , vectorCollection: this.config.getVectorCollection()
         });
+
+        return {
+            indexedArticles: articlesToIndex.length
+            , indexedChunks: chunks.length
+            , vectorCollection: this.config.getVectorCollection()
+            , skippedArticles: articles.length - articlesToIndex.length
+            , removedArticles: staleArticleIds.length
+            , indexingMode: "incremental"
+        };
     }
 
     private async findArticlesForIndexing(
-        request: ReindexRequestDto,
+        request: ReindexRequestDto
     ): Promise<RagIndexArticle[]> {
         var onlyPublished = request.onlyPublished ?? true;
 
         return await this.prisma.article.findMany({
             where: {
-                ...(onlyPublished ? { status: "PUBLISHED" } : {}),
-                ...(typeof request.articleIds !== "undefined"
+                ...(onlyPublished ? { status: "PUBLISHED" } : {})
+                , ...(typeof request.articleIds !== "undefined"
                     ? {
                         id: {
-                            in: request.articleIds,
-                        },
+                            in: request.articleIds
+                        }
                     }
-                    : {}),
+                    : {})
             }
             , include: {
                 tags: {
                     select: {
-                        name: true,
-                    },
-                },
+                        name: true
+                    }
+                }
             }
             , orderBy: {
-                updatedAt: "asc",
+                updatedAt: "asc"
             }
         });
     }
@@ -133,8 +200,79 @@ export class RagIndexService {
                 , categoryId: article.categoryId
                 , tags: article.tags.map((tag) => tag.name)
                 , updatedAt: article.updatedAt.getTime()
-            }),
+            })
         );
+    }
+
+    private findChangedArticles(
+        articles: RagIndexArticle[]
+        , indexedSummaries: QdrantIndexedArticleSummary[]
+    ): RagIndexArticle[] {
+        var indexedSummaryMap = new Map(
+            indexedSummaries.map((summary) => [summary.articleId, summary])
+        );
+        var chunkSize = this.config.getChunkSize();
+        var chunkOverlap = this.config.getChunkOverlap();
+
+        return articles.filter((article) => {
+            var indexedSummary = indexedSummaryMap.get(article.id);
+
+            if (typeof indexedSummary === "undefined") {
+                return true;
+            }
+
+            if (indexedSummary.updatedAt !== article.updatedAt.getTime()) {
+                return true;
+            }
+
+            if (indexedSummary.chunkSize !== chunkSize) {
+                return true;
+            }
+
+            if (indexedSummary.chunkOverlap !== chunkOverlap) {
+                return true;
+            }
+
+            return false;
+        });
+    }
+
+    private findStaleArticleIds(
+        articles: RagIndexArticle[]
+        , indexedSummaries: QdrantIndexedArticleSummary[]
+        , requestedArticleIds?: string[]
+    ): string[] {
+        var currentArticleIds = new Set(articles.map((article) => article.id));
+        var allowedArticleIds = typeof requestedArticleIds !== "undefined"
+            ? new Set(requestedArticleIds)
+            : null;
+
+        return indexedSummaries
+            .map((summary) => summary.articleId)
+            .filter((articleId) => {
+                if (allowedArticleIds !== null && !allowedArticleIds.has(articleId)) {
+                    return false;
+                }
+
+                return !currentArticleIds.has(articleId);
+            });
+    }
+
+    private createIndexedSummaryFilter(articleIds?: string[]): QdrantFilter | undefined {
+        if (typeof articleIds === "undefined" || articleIds.length === 0) {
+            return undefined;
+        }
+
+        return {
+            must: [
+                {
+                    key: "articleId"
+                    , match: {
+                        any: articleIds
+                    }
+                }
+            ]
+        };
     }
 
     private async deleteExistingArticlePointsByIds(articleIds: string[]): Promise<void> {
@@ -174,6 +312,8 @@ export class RagIndexService {
                 , chunkIndex: chunk.chunkIndex
                 , chunk: chunk.chunk
                 , updatedAt: chunk.updatedAt
+                , chunkSize: this.config.getChunkSize()
+                , chunkOverlap: this.config.getChunkOverlap()
             }
         }));
     }

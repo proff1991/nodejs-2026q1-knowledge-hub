@@ -36,6 +36,20 @@ export type QdrantSearchResponse = {
     result?: QdrantSearchResultItem[];
 };
 
+export type QdrantStoredPoint = {
+    id: QdrantPointId;
+    payload?: QdrantPointPayload;
+};
+
+export type QdrantScrollOffset = string | number | null;
+
+export type QdrantScrollResponse = {
+    result?: {
+        points?: QdrantStoredPoint[];
+        next_page_offset?: QdrantScrollOffset;
+    };
+};
+
 export type QdrantCountResponse = {
     result?: {
         count?: number;

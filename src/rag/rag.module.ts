@@ -9,6 +9,7 @@ import { RagConfigService } from "./rag-config.service";
 import { RagController } from "./rag.controller";
 import { RagConversationMemoryService } from "./rag-conversation-memory.service";
 import { RagIndexService } from "./rag-index.service";
+import { RagRerankingService } from "./rag-reranking.service";
 import { RagSearchService } from "./rag-search.service";
 
 @Module({
@@ -23,6 +24,7 @@ import { RagSearchService } from "./rag-search.service";
         , RagChunkingService
         , RagConversationMemoryService
         , RagIndexService
+        , RagRerankingService
         , RagSearchService
         , RagChatService
         , QdrantVectorStoreService
@@ -32,6 +34,7 @@ import { RagSearchService } from "./rag-search.service";
         , RagChunkingService
         , RagConversationMemoryService
         , RagIndexService
+        , RagRerankingService
         , RagSearchService
         , RagChatService
         , QdrantVectorStoreService

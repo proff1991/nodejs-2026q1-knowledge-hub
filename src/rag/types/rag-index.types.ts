@@ -14,4 +14,7 @@ export type RagIndexResponse = {
     indexedArticles: number;
     indexedChunks: number;
     vectorCollection: string;
+    skippedArticles?: number;
+    removedArticles?: number;
+    indexingMode?: "full" | "selective" | "incremental";
 };
