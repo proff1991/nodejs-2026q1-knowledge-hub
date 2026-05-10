@@ -4,6 +4,78 @@ REST API for a **Knowledge Hub** platform built with **NestJS**, **TypeScript**,
 
 This repository contains the implementation up to **10-ai-rag-vectordb**.
 
+## Very Quick Start
+
+For reviewers who want to run the project quickly from a clean checkout.
+
+```powershell
+npm install
+```
+```powershell
+cp .env.example .env
+```
+Open `.env` and set your real Gemini API key:
+
+```dotenv
+GEMINI_API_KEY=your-real-gemini-api-key
+```
+```powershell
+docker compose up --build
+```
+```powershell
+docker compose ps
+```
+All three services should be healthy:
+```text
+knowledge-hub-db        (healthy)
+knowledge-hub-vectordb  (healthy)
+knowledge-hub-app       (healthy)
+```
+```powershell
+npx prisma migrate deploy
+```
+```powershell
+npx prisma db seed
+```
+```powershell
+$login = Invoke-RestMethod `
+    -Uri "http://localhost:4000/auth/login" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body '{"login":"admin","password":"admin123"}'
+$token = $login.accessToken
+```
+## Table of Contents
+
+- [Very Quick Start](#very-quick-start)
+- [Stack](#stack)
+- [Implemented features](#implemented-features)
+- [Default seeded users](#default-seeded-users)
+- [Environment variables](#environment-variables)
+- [Gemini API key setup](#gemini-api-key-setup)
+- [Installation](#installation)
+- [Local development](#local-development)
+- [Docker Compose](#docker-compose)
+- [Prisma commands](#prisma-commands)
+- [Swagger](#swagger)
+- [Auth flow](#auth-flow)
+- [Protected routes](#protected-routes)
+- [Main API routes](#main-api-routes)
+- [AI API routes](#ai-api-routes)
+- [RAG and Vector Database API routes](#rag-and-vector-database-api-routes)
+- [Manual RAG checks](#manual-rag-checks)
+- [Manual AI checks](#manual-ai-checks)
+- [AI caching](#ai-caching)
+- [AI known limitations](#ai-known-limitations)
+- [RAG known limitations](#rag-known-limitations)
+- [Logging](#logging)
+- [Error handling](#error-handling)
+- [Manual checks](#manual-checks)
+- [Testing](#testing)
+- [Available scripts](#available-scripts)
+- [Troubleshooting](#troubleshooting)
+- [Notes](#notes)
+
 ## Stack
 
 - Node.js **24.10.0+**
