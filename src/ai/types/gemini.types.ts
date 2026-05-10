@@ -33,6 +33,53 @@ export type GeminiGenerateTextResult = {
     usageMetadata?: GeminiGenerateContentResponse["usageMetadata"];
 };
 
+export type GeminiEmbeddingTaskType =
+    | "TASK_TYPE_UNSPECIFIED"
+    | "RETRIEVAL_QUERY"
+    | "RETRIEVAL_DOCUMENT"
+    | "SEMANTIC_SIMILARITY"
+    | "CLASSIFICATION"
+    | "CLUSTERING"
+    | "QUESTION_ANSWERING"
+    | "FACT_VERIFICATION"
+    | "CODE_RETRIEVAL_QUERY";
+
+export type GeminiEmbeddingOptions = {
+    taskType?: GeminiEmbeddingTaskType;
+    title?: string;
+    outputDimensionality?: number;
+};
+
+export type GeminiEmbedContentRequest = {
+    model: string;
+    content: GeminiContent;
+    taskType?: GeminiEmbeddingTaskType;
+    title?: string;
+    outputDimensionality?: number;
+};
+
+export type GeminiBatchEmbedContentRequest = {
+    requests: GeminiEmbedContentRequest[];
+};
+
+export type GeminiContentEmbedding = {
+    values?: number[];
+};
+
+export type GeminiBatchEmbedContentResponse = {
+    embeddings?: GeminiContentEmbedding[];
+    usageMetadata?: {
+        promptTokenCount?: number;
+        totalTokenCount?: number;
+    };
+};
+
+export type GeminiEmbeddingResult = {
+    values: number[];
+    model: string;
+    usageMetadata?: GeminiBatchEmbedContentResponse["usageMetadata"];
+};
+
 export type GeminiErrorResponse = {
     error?: {
         code?: number;

@@ -1,12 +1,24 @@
 import { InternalServerErrorException, ServiceUnavailableException } from "@nestjs/common";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { AppLoggerService } from "../../../src/common/logger/app-logger.service";
 import { GeminiService } from "../../../src/ai/gemini.service";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 type MockFetch = ReturnType<typeof vi.fn>;
+
+type MockLogger = Pick<
+    AppLoggerService
+    , "log"
+    | "error"
+    | "warn"
+    | "debug"
+    | "verbose"
+    | "fatal"
+>;
 
 describe("GeminiService", () => {
     var service: GeminiService;
     var fetchMock: MockFetch;
+    var loggerMock: MockLogger;
 
     beforeEach(() => {
         process.env.GEMINI_API_KEY = "test-api-key";
@@ -16,7 +28,16 @@ describe("GeminiService", () => {
         fetchMock = vi.fn();
         global.fetch = fetchMock as unknown as typeof fetch;
 
-        service = new GeminiService();
+        loggerMock = {
+            log: vi.fn()
+            , error: vi.fn()
+            , warn: vi.fn()
+            , debug: vi.fn()
+            , verbose: vi.fn()
+            , fatal: vi.fn()
+        };
+
+        service = new GeminiService(loggerMock as AppLoggerService);
 
         vi.clearAllMocks();
     });

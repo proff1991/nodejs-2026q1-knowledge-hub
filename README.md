@@ -2,7 +2,80 @@
 
 REST API for a **Knowledge Hub** platform built with **NestJS**, **TypeScript**, **PostgreSQL**, **Prisma ORM**, and **Google Gemini API**.
 
-This repository contains the implementation up to **09-ai-llm-integration**.
+This repository contains the implementation up to **10-ai-rag-vectordb**.
+
+## Very Quick Start
+
+For reviewers who want to run the project quickly from a clean checkout.
+
+```powershell
+npm install
+```
+```powershell
+cp .env.example .env
+```
+Open `.env` and set your real Gemini API key:
+
+```dotenv
+GEMINI_API_KEY=your-real-gemini-api-key
+```
+```powershell
+docker compose up --build
+```
+```powershell
+docker compose ps
+```
+All three services should be healthy:
+```text
+knowledge-hub-db        (healthy)
+knowledge-hub-vectordb  (healthy)
+knowledge-hub-app       (healthy)
+```
+```powershell
+npx prisma migrate deploy
+```
+```powershell
+npx prisma db seed
+```
+```powershell
+$login = Invoke-RestMethod `
+    -Uri "http://localhost:4000/auth/login" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body '{"login":"admin","password":"admin123"}'
+$token = $login.accessToken
+```
+## Table of Contents
+
+- [Very Quick Start](#very-quick-start)
+- [Stack](#stack)
+- [Implemented features](#implemented-features)
+- [Default seeded users](#default-seeded-users)
+- [Environment variables](#environment-variables)
+- [Gemini API key setup](#gemini-api-key-setup)
+- [Installation](#installation)
+- [Local development](#local-development)
+- [Docker Compose](#docker-compose)
+- [Prisma commands](#prisma-commands)
+- [Swagger](#swagger)
+- [Auth flow](#auth-flow)
+- [Protected routes](#protected-routes)
+- [Main API routes](#main-api-routes)
+- [AI API routes](#ai-api-routes)
+- [RAG and Vector Database API routes](#rag-and-vector-database-api-routes)
+- [RAG Hacker Scope](#rag-hacker-scope)
+- [Manual RAG checks](#manual-rag-checks)
+- [Manual AI checks](#manual-ai-checks)
+- [AI caching](#ai-caching)
+- [AI known limitations](#ai-known-limitations)
+- [RAG known limitations](#rag-known-limitations)
+- [Logging](#logging)
+- [Error handling](#error-handling)
+- [Manual checks](#manual-checks)
+- [Testing](#testing)
+- [Available scripts](#available-scripts)
+- [Troubleshooting](#troubleshooting)
+- [Notes](#notes)
 
 ## Stack
 
@@ -14,8 +87,11 @@ This repository contains the implementation up to **09-ai-llm-integration**.
 - Swagger / OpenAPI
 - JWT authentication and authorization
 - Google Gemini API integration through HTTP API
+- Google Gemini embeddings for semantic retrieval
+- Qdrant external vector database
+- RAG over Knowledge Hub articles
 - AI-powered article summarization, translation, analysis, and generic generation
-- In-memory AI rate limiting, caching, usage tracking, diagnostics, and short-term conversation context
+- In-memory AI rate limiting, caching, usage tracking, diagnostics, RAG chat memory, and short-term conversation context
 - Custom application logger
 - Centralized error handling
 - File logging with rotation
@@ -64,6 +140,37 @@ AI features:
 - analyze response is validated as structured JSON and safely falls back to plain text analysis;
 - diagnostics include model, base URL, API key presence, rate limit, cache stats, usage stats, latency metrics, and conversation memory stats;
 - `/ai/generate` supports session-based short-term conversation context.
+
+### RAG and vector database integration
+
+Implemented for the `10-ai-rag-vectordb` assignment:
+
+- `POST /ai/rag/index`
+- `POST /ai/rag/search`
+- `POST /ai/rag/chat`
+- `GET /ai/rag/chat/:conversationId/history`
+- `DELETE /ai/rag/index/articles/:articleId`
+
+RAG features:
+
+- Knowledge Hub articles are loaded from PostgreSQL through Prisma;
+- by default only `published` articles are indexed;
+- article text is split into deterministic chunks;
+- chunk size and overlap are configurable through `.env`;
+- Gemini embeddings are used for document chunks and user queries;
+- Qdrant is used as an external vector database in Docker Compose;
+- vector payload stores article id, title, status, category id, tags, chunk index, chunk text, and update timestamp;
+- semantic search returns ranked chunks with article attribution;
+- RAG chat retrieves relevant chunks, builds a grounded prompt, generates an answer with Gemini, and returns sources used for the answer;
+- RAG chat stores short-term in-memory conversation history by `conversationId`;
+- RAG endpoints are protected by JWT authentication and AI rate limiting;
+- vector database and Gemini outages are handled with `503` responses and safe logs;
+- full reindex recreates the Qdrant collection to avoid stale vectors;
+- selective reindex deletes old vectors for requested article ids before indexing current article content;
+- incremental reindex skips unchanged articles and removes stale indexed vectors;
+- semantic search uses hybrid retrieval by combining Gemini vector search with lexical payload search;
+- a secondary reranking step combines semantic similarity, lexical score, title match, and exact phrase match;
+- article vector deletion returns `204` when vectors are removed and `404` when index entries are not found.
 
 ### Database
 
@@ -186,8 +293,17 @@ LOG_MAX_FILE_SIZE=1048576
 GEMINI_API_KEY=your-gemini-api-key
 GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com
 GEMINI_MODEL=gemini-2.5-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+
 AI_RATE_LIMIT_RPM=20
 AI_CACHE_TTL_SEC=300
+
+RAG_VECTOR_DB_PROVIDER=qdrant
+RAG_VECTOR_DB_URL=http://vectordb:6333
+RAG_VECTOR_COLLECTION=knowledge_hub_articles
+RAG_CHUNK_SIZE=800
+RAG_CHUNK_OVERLAP=200
+RAG_CONVERSATION_MAX_MESSAGES=20
 ```
 
 ### Database connection notes
@@ -202,8 +318,9 @@ AI_CACHE_TTL_SEC=300
 | --- | --- | --- |
 | `GEMINI_API_KEY` | Google Gemini API key from Google AI Studio | `your-gemini-api-key` |
 | `GEMINI_API_BASE_URL` | Gemini API base URL | `https://generativelanguage.googleapis.com` |
-| `GEMINI_MODEL` | Gemini model used by the app | `gemini-2.5-flash` |
-| `AI_RATE_LIMIT_RPM` | Maximum number of AI requests per authenticated user per minute | `20` |
+| `GEMINI_MODEL` | Gemini model used for answer generation | `gemini-2.5-flash` |
+| `GEMINI_EMBEDDING_MODEL` | Gemini model used for document and query embeddings | `gemini-embedding-001` |
+| `AI_RATE_LIMIT_RPM` | Maximum number of AI/RAG requests per authenticated user per minute | `20` |
 | `AI_CACHE_TTL_SEC` | In-memory cache TTL for summarize/translate responses | `300` |
 
 The assignment listed the `"gemini-2.0-flash"` model as an example, but neither I nor any other students in the Discord chat had any free tokens for that model. So, I chose the `"gemini-2.5-flash"` model as the default.
@@ -221,6 +338,29 @@ GEMINI_MODEL=gemini-3-flash-preview
 ```
 
 Do not commit a real Gemini API key. Keep the real value only in local `.env`.
+
+### RAG environment variables
+
+| Variable | Description | Default / example |
+| --- | --- | --- |
+| `RAG_VECTOR_DB_PROVIDER` | Vector database provider name | `qdrant` |
+| `RAG_VECTOR_DB_URL` | Qdrant URL used by the app inside Docker Compose | `http://vectordb:6333` |
+| `RAG_VECTOR_COLLECTION` | Qdrant collection name for Knowledge Hub article chunks | `knowledge_hub_articles` |
+| `RAG_CHUNK_SIZE` | Maximum chunk size used during article indexing | `800` |
+| `RAG_CHUNK_OVERLAP` | Text overlap between neighboring chunks | `200` |
+| `RAG_CONVERSATION_MAX_MESSAGES` | Maximum number of messages kept in RAG chat memory | `20` |
+
+When the application runs inside Docker Compose, use the service hostname in `RAG_VECTOR_DB_URL`:
+
+```env
+RAG_VECTOR_DB_URL=http://vectordb:6333
+```
+
+When checking Qdrant from the host machine, use:
+
+```text
+http://localhost:6333
+```
 
 ### Logging environment variables
 
@@ -376,8 +516,15 @@ Copy `.env.example` to `.env` and set the real Gemini API key:
 GEMINI_API_KEY=<your real Gemini API key>
 GEMINI_API_BASE_URL=https://generativelanguage.googleapis.com
 GEMINI_MODEL=gemini-2.5-flash
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
 AI_RATE_LIMIT_RPM=20
 AI_CACHE_TTL_SEC=300
+RAG_VECTOR_DB_PROVIDER=qdrant
+RAG_VECTOR_DB_URL=http://vectordb:6333
+RAG_VECTOR_COLLECTION=knowledge_hub_articles
+RAG_CHUNK_SIZE=800
+RAG_CHUNK_OVERLAP=200
+RAG_CONVERSATION_MAX_MESSAGES=20
 ```
 
 If `gemini-2.5-flash` has no free-tier quota for your account, use another available model locally:
@@ -399,7 +546,7 @@ The API will be available at:
 
 ## Docker Compose
 
-Build and start the application together with PostgreSQL:
+Build and start the application together with PostgreSQL and Qdrant:
 
 ```bash
 docker compose up --build
@@ -877,6 +1024,508 @@ Response example:
 
 Diagnostics intentionally returns only `hasApiKey: true/false` and never returns the actual API key.
 
+## RAG and Vector Database API routes
+
+All RAG routes require an access token.
+
+RAG routes are protected by JWT authentication and additionally limited by `AI_RATE_LIMIT_RPM`.
+
+### Build or refresh RAG index
+
+```text
+POST /ai/rag/index
+```
+
+Request body:
+
+```json
+{
+  "onlyPublished": true
+}
+```
+
+Selective reindex is also supported:
+
+```json
+{
+  "onlyPublished": true,
+  "articleIds": [
+    "d19bf1c3-ad1e-4688-b9ec-483a1e2cabb0"
+  ]
+}
+```
+
+Incremental reindex is supported for Hacker scope checks:
+
+```json
+{
+  "onlyPublished": true,
+  "incremental": true
+}
+```
+
+Incremental mode indexes only changed articles, skips unchanged articles, and removes stale vectors for articles that should no longer be present in the index.
+
+Response example:
+
+```json
+{
+  "indexedArticles": 2,
+  "indexedChunks": 2,
+  "vectorCollection": "knowledge_hub_articles",
+  "indexingMode": "full"
+}
+```
+
+Full reindex recreates the Qdrant collection before upserting fresh vectors. This prevents stale chunks from remaining in search results after articles are updated, deleted, or moved out of the published status.
+
+Incremental response example when nothing changed:
+
+```json
+{
+  "indexedArticles": 0,
+  "indexedChunks": 0,
+  "vectorCollection": "knowledge_hub_articles",
+  "skippedArticles": 2,
+  "removedArticles": 0,
+  "indexingMode": "incremental"
+}
+```
+
+### Semantic RAG search
+
+```text
+POST /ai/rag/search
+```
+
+Request body:
+
+```json
+{
+  "query": "How does Prisma work with PostgreSQL?",
+  "limit": 5
+}
+```
+
+Optional metadata filters:
+
+```json
+{
+  "query": "authentication",
+  "limit": 5,
+  "articleStatus": "published",
+  "categoryId": "550e8400-e29b-41d4-a716-446655440000",
+  "tags": [
+    "nestjs",
+    "auth"
+  ]
+}
+```
+
+Response example:
+
+```json
+{
+  "results": [
+    {
+      "articleId": "d19bf1c3-ad1e-4688-b9ec-483a1e2cabb0",
+      "articleTitle": "Prisma with PostgreSQL",
+      "chunk": "Title: Prisma with PostgreSQL...",
+      "similarity": 0.82,
+      "semanticSimilarity": 0.76,
+      "lexicalScore": 0.5,
+      "rerankScore": 0.82,
+      "retrievalMode": "hybrid"
+    }
+  ]
+}
+```
+
+If `query` is missing, the API returns `400 Bad Request`.
+
+The required response fields remain `articleId`, `articleTitle`, `chunk`, and `similarity`. Hacker scope adds optional diagnostic fields: `semanticSimilarity`, `lexicalScore`, `rerankScore`, and `retrievalMode`.
+
+### RAG chat
+
+```text
+POST /ai/rag/chat
+```
+
+Request body:
+
+```json
+{
+  "question": "What does Knowledge Hub say about Prisma and PostgreSQL?"
+}
+```
+
+Response example:
+
+```json
+{
+  "answer": "Knowledge Hub says that Prisma is used with PostgreSQL...",
+  "sources": [
+    {
+      "articleId": "d19bf1c3-ad1e-4688-b9ec-483a1e2cabb0",
+      "articleTitle": "Prisma with PostgreSQL",
+      "relevantChunk": "Title: Prisma with PostgreSQL..."
+    }
+  ],
+  "conversationId": "30d70301-8eb3-4af8-a819-fad5ad3042bb"
+}
+```
+
+Continue the same conversation by sending `conversationId`:
+
+```json
+{
+  "question": "Can you explain it in simpler words?",
+  "conversationId": "30d70301-8eb3-4af8-a819-fad5ad3042bb"
+}
+```
+
+If `question` is missing, the API returns `400 Bad Request`.
+
+### RAG chat history
+
+```text
+GET /ai/rag/chat/:conversationId/history
+```
+
+Response example:
+
+```json
+{
+  "conversationId": "30d70301-8eb3-4af8-a819-fad5ad3042bb",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What does Knowledge Hub say about Prisma and PostgreSQL?",
+      "createdAt": "2026-05-10T14:18:35.890Z"
+    },
+    {
+      "role": "assistant",
+      "content": "Knowledge Hub says that Prisma is used with PostgreSQL...",
+      "createdAt": "2026-05-10T14:18:37.124Z"
+    }
+  ]
+}
+```
+
+RAG conversation history is stored in memory and is lost when the application restarts.
+
+### Delete article vectors from RAG index
+
+```text
+DELETE /ai/rag/index/articles/:articleId
+```
+
+Expected successful response:
+
+```text
+204 No Content
+```
+
+If vectors for the article are not found, the API returns:
+
+```text
+404 Not Found
+```
+
+## RAG Hacker Scope
+
+The implementation includes the optional Hacker scope improvements.
+
+### Incremental indexing pipeline
+
+`POST /ai/rag/index` supports `incremental: true`. In this mode the application compares current article metadata with indexed Qdrant payload metadata and indexes only changed articles. It also removes stale vectors for articles that are no longer eligible for the current index request.
+
+Example:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:4000/ai/rag/index" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer $token" } `
+    -ContentType "application/json" `
+    -Body '{"onlyPublished":true,"incremental":true}' | ConvertTo-Json -Depth 20
+```
+
+### Hybrid retrieval
+
+`POST /ai/rag/search` combines two retrieval strategies:
+
+- semantic retrieval through Gemini query embeddings and Qdrant vector search;
+- lexical retrieval by scanning indexed Qdrant payload chunks and matching query terms against article titles and chunk text.
+
+Candidates from both strategies are merged by point id. If the same chunk is found by both semantic and lexical retrieval, the result uses `retrievalMode: "hybrid"`.
+
+### Secondary reranking
+
+After semantic and lexical candidates are merged, a secondary reranking step recalculates the final score using semantic similarity, lexical score, title match, and exact phrase match. The final response keeps the assignment-required `similarity` field and also returns optional diagnostic fields:
+
+- `semanticSimilarity`
+- `lexicalScore`
+- `rerankScore`
+- `retrievalMode`
+
+## Manual RAG checks
+
+### 1. Start Docker Compose
+
+```bash
+docker compose up --build
+```
+
+Check that all required containers are healthy:
+
+```bash
+docker compose ps
+```
+
+Expected services:
+
+```text
+knowledge-hub-db
+knowledge-hub-vectordb
+knowledge-hub-app
+```
+
+### 2. Check Qdrant from host machine
+
+```bash
+curl http://localhost:6333/healthz
+```
+
+Expected response:
+
+```text
+healthz check passed
+```
+
+Check Qdrant collections:
+
+```bash
+curl http://localhost:6333/collections
+```
+
+### 3. Check that app can reach Qdrant inside Docker Compose network
+
+```bash
+docker compose exec app node -e "fetch('http://vectordb:6333/healthz').then(r=>r.text()).then(console.log).catch(console.error)"
+```
+
+Expected response:
+
+```text
+healthz check passed
+```
+
+### 4. Apply migrations and seed data
+
+```bash
+npx prisma migrate deploy
+npx prisma db seed
+```
+
+For a clean database:
+
+```bash
+npx prisma migrate reset --force
+```
+
+### 5. Login and get access token in PowerShell
+
+```powershell
+$login = Invoke-RestMethod `
+    -Uri "http://localhost:4000/auth/login" `
+    -Method Post `
+    -ContentType "application/json" `
+    -Body '{"login":"admin","password":"admin123"}'
+
+$token = $login.accessToken
+$token
+```
+
+### 6. Build RAG index
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:4000/ai/rag/index" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer $token" } `
+    -ContentType "application/json" `
+    -Body '{"onlyPublished":true}' | ConvertTo-Json -Depth 20
+```
+
+Expected response:
+
+```json
+{
+  "indexedArticles": 2,
+  "indexedChunks": 2,
+  "vectorCollection": "knowledge_hub_articles"
+}
+```
+
+The exact numbers may differ when seed data or article content changes.
+
+### 6a. Test incremental indexing
+
+Run incremental indexing after the full index has already been built:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:4000/ai/rag/index" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer $token" } `
+    -ContentType "application/json" `
+    -Body '{"onlyPublished":true,"incremental":true}' | ConvertTo-Json -Depth 20
+```
+
+If article content was not changed after the previous full index, the response should usually show:
+
+```json
+{
+  "indexedArticles": 0,
+  "indexedChunks": 0,
+  "vectorCollection": "knowledge_hub_articles",
+  "skippedArticles": 2,
+  "removedArticles": 0,
+  "indexingMode": "incremental"
+}
+```
+
+
+### 7. Check Qdrant collection
+
+```bash
+curl http://localhost:6333/collections
+```
+
+```bash
+curl http://localhost:6333/collections/knowledge_hub_articles
+```
+
+`points_count` should be greater than `0` after successful indexing.
+
+`indexed_vectors_count` can be `0` for a very small collection because Qdrant may skip building a separate vector index below its indexing threshold.
+
+### 8. Test semantic search
+
+```powershell
+$search = Invoke-RestMethod `
+    -Uri "http://localhost:4000/ai/rag/search" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer $token" } `
+    -ContentType "application/json" `
+    -Body '{"query":"How does Prisma work with PostgreSQL?","limit":5}'
+
+$search | ConvertTo-Json -Depth 20
+```
+
+For Hacker scope verification, check that search results include optional fields such as `semanticSimilarity`, `lexicalScore`, `rerankScore`, and `retrievalMode`.
+
+### 9. Test RAG chat
+
+```powershell
+$chat = Invoke-RestMethod `
+    -Uri "http://localhost:4000/ai/rag/chat" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer $token" } `
+    -ContentType "application/json" `
+    -Body '{"question":"What does Knowledge Hub say about Prisma and PostgreSQL?"}'
+
+$chat | ConvertTo-Json -Depth 20
+```
+
+### 10. Test RAG chat history
+
+```powershell
+$history = Invoke-RestMethod `
+    -Uri "http://localhost:4000/ai/rag/chat/$($chat.conversationId)/history" `
+    -Method Get `
+    -Headers @{ Authorization = "Bearer $token" }
+
+$history | ConvertTo-Json -Depth 20
+```
+
+### 11. Test validation errors
+
+Windows PowerShell 5.1 does not support `-SkipHttpErrorCheck`, so `400` responses can be checked with `try/catch`:
+
+```powershell
+try {
+    Invoke-WebRequest `
+        -Uri "http://localhost:4000/ai/rag/search" `
+        -Method Post `
+        -Headers @{ Authorization = "Bearer $token" } `
+        -ContentType "application/json" `
+        -Body '{}'
+} catch {
+    $response = $_.Exception.Response
+    $statusCode = [int]$response.StatusCode
+
+    Write-Host "StatusCode: $statusCode"
+}
+```
+
+Expected status:
+
+```text
+StatusCode: 400
+```
+
+### 12. Test delete endpoint
+
+```powershell
+$articleId = $search.results[0].articleId
+
+Invoke-WebRequest `
+    -Uri "http://localhost:4000/ai/rag/index/articles/$articleId" `
+    -Method Delete `
+    -Headers @{ Authorization = "Bearer $token" }
+```
+
+Expected status:
+
+```text
+204 No Content
+```
+
+Repeated deletion should return `404`:
+
+```powershell
+try {
+    Invoke-WebRequest `
+        -Uri "http://localhost:4000/ai/rag/index/articles/$articleId" `
+        -Method Delete `
+        -Headers @{ Authorization = "Bearer $token" }
+} catch {
+    $response = $_.Exception.Response
+    $statusCode = [int]$response.StatusCode
+
+    Write-Host "StatusCode: $statusCode"
+}
+```
+
+Expected status:
+
+```text
+StatusCode: 404
+```
+
+After testing delete, rebuild the index if more RAG checks are needed:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:4000/ai/rag/index" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer $token" } `
+    -ContentType "application/json" `
+    -Body '{"onlyPublished":true}' | ConvertTo-Json -Depth 20
+```
+
 ## Manual AI checks
 
 ### 1. Login and get access token
@@ -1025,6 +1674,21 @@ Including `updatedAt` prevents stale cached AI responses after the article is up
 - In-memory cache, usage tracking, rate limit buckets, diagnostics, and conversation context are reset when the application restarts.
 - Conversation context for `/ai/generate` is short-term only and is not persisted to the database.
 - The application never logs or returns the real Gemini API key.
+
+## RAG known limitations
+
+- RAG quality depends on indexed article content. If article content is short or outdated, answers can be incomplete.
+- Gemini free-tier quotas can limit indexing and chat requests because both embeddings and generation call Gemini.
+- Indexing large datasets can be slow because embeddings are generated through an external API.
+- Qdrant data is persisted in a Docker volume. Old data can remain until the collection is recreated or the volume is removed.
+- Full reindex recreates the RAG collection. This is simple and consistent, but can be slow for very large datasets.
+- Incremental indexing reduces repeated work by skipping unchanged articles, but it is request-driven and not a background worker.
+- Hybrid lexical retrieval scans stored Qdrant payload chunks, which is acceptable for the course dataset but would need a dedicated lexical index for large production datasets.
+- Secondary reranking is deterministic and local; it does not call a separate reranker model.
+- Selective reindex is idempotent for provided article ids, but automatic background indexing is not implemented.
+- RAG chat memory is in-memory only and is lost when the application restarts.
+- Model availability can differ by Google account, project, quota, and region.
+- The embedding model is configurable because older Gemini embedding models can become unavailable.
 
 ## Logging
 
@@ -1534,11 +2198,124 @@ docker compose up -d db
 npx prisma migrate reset --force
 ```
 
+### Qdrant container is missing
+
+If only `knowledge-hub-db` and `knowledge-hub-app` are running, check whether Docker Compose sees the vector database service:
+
+```bash
+docker compose config --services
+```
+
+Expected services:
+
+```text
+db
+vectordb
+app
+adminer
+```
+
+If `vectordb` is missing, check `docker-compose.yml`.
+
+### Qdrant healthcheck is unhealthy
+
+Check logs:
+
+```bash
+docker compose logs vectordb
+```
+
+Check Qdrant manually from host:
+
+```bash
+curl http://localhost:6333/healthz
+```
+
+Check Qdrant from the app container:
+
+```bash
+docker compose exec app node -e "fetch('http://vectordb:6333/healthz').then(r=>r.text()).then(console.log).catch(console.error)"
+```
+
+### RAG returns `503 Vector database is unavailable`
+
+Check that the app uses Docker Compose service hostname, not `localhost`:
+
+```env
+RAG_VECTOR_DB_URL=http://vectordb:6333
+```
+
+Inside the `app` container, `localhost` means the app container itself, not Qdrant.
+
+### RAG index returns Gemini embedding error
+
+Check:
+
+```text
+GEMINI_API_KEY
+GEMINI_API_BASE_URL
+GEMINI_EMBEDDING_MODEL
+Gemini embedding model availability
+Gemini quota
+```
+
+Recommended default:
+
+```env
+GEMINI_EMBEDDING_MODEL=gemini-embedding-001
+```
+
+If the selected embedding model is unavailable for the current account/project/region, use another model available to your Gemini API key.
+
+### RAG search returns empty results
+
+Check that the index was built:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:4000/ai/rag/index" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer $token" } `
+    -ContentType "application/json" `
+    -Body '{"onlyPublished":true}' | ConvertTo-Json -Depth 20
+```
+
+Check Qdrant point count:
+
+```bash
+curl http://localhost:6333/collections/knowledge_hub_articles
+```
+
+Also check that there are published articles in PostgreSQL.
+
+### PowerShell shows JSON as a table or truncates nested fields
+
+`Invoke-RestMethod` converts JSON to PowerShell objects and displays them as tables. Use `ConvertTo-Json -Depth 20` to see formatted JSON:
+
+```powershell
+$response | ConvertTo-Json -Depth 20
+```
+
+Or use `Invoke-WebRequest` to inspect raw content:
+
+```powershell
+$response = Invoke-WebRequest `
+    -Uri "http://localhost:4000/ai/rag/search" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer $token" } `
+    -ContentType "application/json" `
+    -Body '{"query":"How does Prisma work with PostgreSQL?","limit":5}'
+
+$response.Content
+```
+
 ## Notes
 
 - The application targets Node.js `>=24.10.0 <25`.
 - The application uses generated Prisma Client from `src/generated/prisma`.
 - Gemini integration is implemented through HTTP API calls with `fetch`.
+- Gemini embeddings are used for semantic search and RAG indexing.
+- Qdrant is used as the external vector database.
 - No real Gemini API key is committed to the repository.
 - Passwords are never returned in API responses.
 - Sensitive fields are never written to logs in plain text.

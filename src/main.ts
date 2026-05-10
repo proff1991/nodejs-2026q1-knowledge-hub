@@ -10,9 +10,8 @@ import { GlobalExceptionFilter } from './common/filters/global-exception.filter'
 import { setupProcessErrorHandlers } from './common/process/process-error-handlers';
 
 var bootstrap = async (): Promise<void> => {
-  var app = await NestFactory.create(AppModule, {
-    bufferLogs: true,
-  });
+  var app = await NestFactory.create(AppModule
+    , { bufferLogs: true });
 
   var logger = app.get(AppLoggerService);
 
@@ -31,10 +30,10 @@ var bootstrap = async (): Promise<void> => {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      transform: true,
-      forbidNonWhitelisted: true,
-    }),
+      whitelist: true
+      , transform: true
+      , forbidNonWhitelisted: true
+    })
   );
 
   app.useGlobalInterceptors(new HttpLoggingInterceptor(logger), new PasswordExcludeInterceptor());
@@ -44,12 +43,12 @@ var bootstrap = async (): Promise<void> => {
     .setDescription('REST API for the Knowledge Hub platform')
     .setVersion('1.0')
     .addBearerAuth({
-      type: 'http',
-      scheme: 'bearer',
-      bearerFormat: 'JWT',
-      name: 'Authorization',
-      description: 'Enter JWT access token',
-      in: 'header',
+      type: 'http'
+      , scheme: 'bearer'
+      , bearerFormat: 'JWT'
+      , name: 'Authorization'
+      , description: 'Enter JWT access token'
+      , in: 'header'
     })
     .build();
 

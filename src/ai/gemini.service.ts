@@ -3,8 +3,13 @@ import {
     , InternalServerErrorException
     , ServiceUnavailableException
 } from "@nestjs/common";
+import { AppLoggerService } from "../common/logger/app-logger.service";
 import {
-    GeminiErrorResponse
+    GeminiBatchEmbedContentRequest
+    , GeminiBatchEmbedContentResponse
+    , GeminiEmbeddingOptions
+    , GeminiEmbeddingResult
+    , GeminiErrorResponse
     , GeminiGenerateContentRequest
     , GeminiGenerateContentResponse
     , GeminiGenerateTextResult
@@ -14,8 +19,11 @@ import {
 export class GeminiService {
     private readonly defaultBaseUrl = "https://generativelanguage.googleapis.com";
     private readonly defaultModel = "gemini-2.0-flash";
+    private readonly defaultEmbeddingModel = "gemini-embedding-001";
     private readonly requestTimeoutMs = 30000;
     private readonly maxRetries = 3;
+
+    constructor(private readonly logger: AppLoggerService) { }
 
     async generateText(
         prompt: string,
@@ -33,8 +41,62 @@ export class GeminiService {
                 lastError = error;
 
                 if (!this.shouldRetry(error, attempt)) {
+                    this.logGeminiFailure("Gemini text generation failed", error, {
+                        attempt
+                        , operation: "generateText"
+                    });
+
                     throw error;
                 }
+
+                this.logGeminiFailure("Gemini text generation retry scheduled", error, {
+                    attempt
+                    , operation: "generateText"
+                    , retryAfterMs: this.getBackoffMs(attempt)
+                });
+
+                await this.delay(this.getBackoffMs(attempt));
+            }
+        }
+
+        throw lastError;
+    }
+
+    async embedText(text: string, options?: GeminiEmbeddingOptions): Promise<GeminiEmbeddingResult> {
+        var results = await this.embedTexts([text], options);
+
+        return results[0];
+    }
+
+    async embedTexts(texts: string[], options?: GeminiEmbeddingOptions): Promise<GeminiEmbeddingResult[]> {
+        if (texts.length === 0) {
+            return [];
+        }
+
+        var lastError: unknown = null;
+
+        for (var attempt = 1; attempt <= this.maxRetries; attempt++) {
+            try {
+                return await this.embedTextsOnce(texts, options, attempt);
+            } catch (error) {
+                lastError = error;
+
+                if (!this.shouldRetry(error, attempt)) {
+                    this.logGeminiFailure("Gemini embeddings failed", error, {
+                        attempt
+                        , operation: "embedTexts"
+                        , textsCount: texts.length
+                    });
+
+                    throw error;
+                }
+
+                this.logGeminiFailure("Gemini embeddings retry scheduled", error, {
+                    attempt
+                    , operation: "embedTexts"
+                    , textsCount: texts.length
+                    , retryAfterMs: this.getBackoffMs(attempt)
+                });
 
                 await this.delay(this.getBackoffMs(attempt));
             }
@@ -68,6 +130,29 @@ export class GeminiService {
         };
     }
 
+    private async embedTextsOnce(
+        texts: string[],
+        options: GeminiEmbeddingOptions | undefined,
+        attempt: number,
+    ): Promise<GeminiEmbeddingResult[]> {
+        var response = await this.fetchBatchEmbedContents(texts, options);
+        var responseData = await this.readResponse(response);
+
+        if (!response.ok) {
+            this.throwGeminiError(response.status, responseData, attempt);
+        }
+
+        var geminiResponse = responseData as GeminiBatchEmbedContentResponse;
+        var embeddings = this.extractEmbeddings(geminiResponse, texts.length);
+        var model = this.getEmbeddingModel();
+
+        return embeddings.map((values) => ({
+            values,
+            model,
+            usageMetadata: geminiResponse.usageMetadata,
+        }));
+    }
+
     private async fetchGenerateContent(
         prompt: string,
         options?: {
@@ -90,11 +175,49 @@ export class GeminiService {
                 signal: controller.signal,
             });
         } catch (error) {
+            this.logGeminiFailure("Gemini text generation network request failed", error, {
+                operation: "generateContent"
+            });
+
             if (error instanceof Error && error.name === "AbortError") {
                 throw new ServiceUnavailableException("Gemini API request timed out");
             }
 
             throw new ServiceUnavailableException("Gemini API is unavailable");
+        } finally {
+            clearTimeout(timeout);
+        }
+    }
+
+    private async fetchBatchEmbedContents(
+        texts: string[],
+        options?: GeminiEmbeddingOptions,
+    ): Promise<Response> {
+        var apiKey = this.getApiKey();
+        var url = this.buildBatchEmbedContentsUrl(apiKey);
+        var controller = new AbortController();
+        var timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+        try {
+            return await fetch(url, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(this.createBatchEmbeddingRequestBody(texts, options)),
+                signal: controller.signal,
+            });
+        } catch (error) {
+            this.logGeminiFailure("Gemini embeddings network request failed", error, {
+                operation: "batchEmbedContents"
+                , textsCount: texts.length
+            });
+
+            if (error instanceof Error && error.name === "AbortError") {
+                throw new ServiceUnavailableException("Gemini API embedding request timed out");
+            }
+
+            throw new ServiceUnavailableException("Gemini API embeddings are unavailable");
         } finally {
             clearTimeout(timeout);
         }
@@ -118,6 +241,20 @@ export class GeminiService {
         return process.env.GEMINI_MODEL || this.defaultModel;
     }
 
+    private getEmbeddingModel(): string {
+        return process.env.GEMINI_EMBEDDING_MODEL || this.defaultEmbeddingModel;
+    }
+
+    private getEmbeddingModelPath(): string {
+        var model = this.getEmbeddingModel();
+
+        if (model.startsWith("models/")) {
+            return model;
+        }
+
+        return `models/${model}`;
+    }
+
     private getModelPath(): string {
         var model = this.getModel();
 
@@ -133,6 +270,13 @@ export class GeminiService {
         var modelPath = this.getModelPath();
 
         return `${baseUrl}/v1beta/${modelPath}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    }
+
+    private buildBatchEmbedContentsUrl(apiKey: string): string {
+        var baseUrl = this.getBaseUrl();
+        var modelPath = this.getEmbeddingModelPath();
+
+        return `${baseUrl}/v1beta/${modelPath}:batchEmbedContents?key=${encodeURIComponent(apiKey)}`;
     }
 
     private createRequestBody(
@@ -161,6 +305,35 @@ export class GeminiService {
                     ? { maxOutputTokens: options.maxOutputTokens }
                     : {}),
             },
+        };
+    }
+
+    private createBatchEmbeddingRequestBody(
+        texts: string[],
+        options?: GeminiEmbeddingOptions,
+    ): GeminiBatchEmbedContentRequest {
+        var model = this.getEmbeddingModelPath();
+
+        return {
+            requests: texts.map((text) => ({
+                model,
+                content: {
+                    parts: [
+                        {
+                            text,
+                        },
+                    ],
+                },
+                ...(typeof options?.taskType !== "undefined"
+                    ? { taskType: options.taskType }
+                    : {}),
+                ...(typeof options?.title !== "undefined"
+                    ? { title: options.title }
+                    : {}),
+                ...(typeof options?.outputDimensionality !== "undefined"
+                    ? { outputDimensionality: options.outputDimensionality }
+                    : {}),
+            })),
         };
     }
 
@@ -196,10 +369,44 @@ export class GeminiService {
         return text;
     }
 
+    private extractEmbeddings(
+        response: GeminiBatchEmbedContentResponse,
+        expectedCount: number,
+    ): number[][] {
+        var embeddings = response.embeddings ?? [];
+
+        if (embeddings.length !== expectedCount) {
+            throw new ServiceUnavailableException("Gemini API returned unexpected embeddings count");
+        }
+
+        return embeddings.map((embedding) => {
+            var values = embedding.values ?? [];
+
+            if (values.length === 0) {
+                throw new ServiceUnavailableException("Gemini API returned an empty embedding");
+            }
+
+            return values;
+        });
+    }
+
     private throwGeminiError(statusCode: number, responseData: unknown, attempt: number): never {
         var errorResponse = responseData as GeminiErrorResponse;
         var upstreamStatus = errorResponse.error?.status;
         var retryAfter = this.extractRetryAfter(errorResponse);
+
+        this.logger.error(
+            "Gemini API returned an error response"
+            , undefined
+            , "GeminiService"
+            , {
+                statusCode
+                , upstreamStatus
+                , attempt
+                , retryAfter
+                , message: errorResponse.error?.message
+            }
+        );
 
         if (statusCode === 401 || statusCode === 403) {
             throw new InternalServerErrorException("Gemini API authentication failed");
@@ -247,6 +454,26 @@ export class GeminiService {
 
     private delay(ms: number): Promise<void> {
         return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    private logGeminiFailure(
+        message: string
+        , error: unknown
+        , metadata: Record<string, unknown>
+    ): void {
+        var errorMessage = error instanceof Error
+            ? error.message
+            : "Unknown Gemini error";
+
+        this.logger.error(
+            message
+            , undefined
+            , "GeminiService"
+            , {
+                ...metadata
+                , error: errorMessage
+            }
+        );
     }
 
     private extractRetryAfter(errorResponse: GeminiErrorResponse): number | null {
