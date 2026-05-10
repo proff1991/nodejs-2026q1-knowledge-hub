@@ -63,6 +63,7 @@ $token = $login.accessToken
 - [Main API routes](#main-api-routes)
 - [AI API routes](#ai-api-routes)
 - [RAG and Vector Database API routes](#rag-and-vector-database-api-routes)
+- [RAG Hacker Scope](#rag-hacker-scope)
 - [Manual RAG checks](#manual-rag-checks)
 - [Manual AI checks](#manual-ai-checks)
 - [AI caching](#ai-caching)
@@ -166,6 +167,9 @@ RAG features:
 - vector database and Gemini outages are handled with `503` responses and safe logs;
 - full reindex recreates the Qdrant collection to avoid stale vectors;
 - selective reindex deletes old vectors for requested article ids before indexing current article content;
+- incremental reindex skips unchanged articles and removes stale indexed vectors;
+- semantic search uses hybrid retrieval by combining Gemini vector search with lexical payload search;
+- a secondary reranking step combines semantic similarity, lexical score, title match, and exact phrase match;
 - article vector deletion returns `204` when vectors are removed and `404` when index entries are not found.
 
 ### Database
@@ -1051,17 +1055,42 @@ Selective reindex is also supported:
 }
 ```
 
+Incremental reindex is supported for Hacker scope checks:
+
+```json
+{
+  "onlyPublished": true,
+  "incremental": true
+}
+```
+
+Incremental mode indexes only changed articles, skips unchanged articles, and removes stale vectors for articles that should no longer be present in the index.
+
 Response example:
 
 ```json
 {
   "indexedArticles": 2,
   "indexedChunks": 2,
-  "vectorCollection": "knowledge_hub_articles"
+  "vectorCollection": "knowledge_hub_articles",
+  "indexingMode": "full"
 }
 ```
 
 Full reindex recreates the Qdrant collection before upserting fresh vectors. This prevents stale chunks from remaining in search results after articles are updated, deleted, or moved out of the published status.
+
+Incremental response example when nothing changed:
+
+```json
+{
+  "indexedArticles": 0,
+  "indexedChunks": 0,
+  "vectorCollection": "knowledge_hub_articles",
+  "skippedArticles": 2,
+  "removedArticles": 0,
+  "indexingMode": "incremental"
+}
+```
 
 ### Semantic RAG search
 
@@ -1102,13 +1131,19 @@ Response example:
       "articleId": "d19bf1c3-ad1e-4688-b9ec-483a1e2cabb0",
       "articleTitle": "Prisma with PostgreSQL",
       "chunk": "Title: Prisma with PostgreSQL...",
-      "similarity": 0.72
+      "similarity": 0.82,
+      "semanticSimilarity": 0.76,
+      "lexicalScore": 0.5,
+      "rerankScore": 0.82,
+      "retrievalMode": "hybrid"
     }
   ]
 }
 ```
 
 If `query` is missing, the API returns `400 Bad Request`.
+
+The required response fields remain `articleId`, `articleTitle`, `chunk`, and `similarity`. Hacker scope adds optional diagnostic fields: `semanticSimilarity`, `lexicalScore`, `rerankScore`, and `retrievalMode`.
 
 ### RAG chat
 
@@ -1196,6 +1231,43 @@ If vectors for the article are not found, the API returns:
 ```text
 404 Not Found
 ```
+
+## RAG Hacker Scope
+
+The implementation includes the optional Hacker scope improvements.
+
+### Incremental indexing pipeline
+
+`POST /ai/rag/index` supports `incremental: true`. In this mode the application compares current article metadata with indexed Qdrant payload metadata and indexes only changed articles. It also removes stale vectors for articles that are no longer eligible for the current index request.
+
+Example:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:4000/ai/rag/index" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer $token" } `
+    -ContentType "application/json" `
+    -Body '{"onlyPublished":true,"incremental":true}' | ConvertTo-Json -Depth 20
+```
+
+### Hybrid retrieval
+
+`POST /ai/rag/search` combines two retrieval strategies:
+
+- semantic retrieval through Gemini query embeddings and Qdrant vector search;
+- lexical retrieval by scanning indexed Qdrant payload chunks and matching query terms against article titles and chunk text.
+
+Candidates from both strategies are merged by point id. If the same chunk is found by both semantic and lexical retrieval, the result uses `retrievalMode: "hybrid"`.
+
+### Secondary reranking
+
+After semantic and lexical candidates are merged, a secondary reranking step recalculates the final score using semantic similarity, lexical score, title match, and exact phrase match. The final response keeps the assignment-required `similarity` field and also returns optional diagnostic fields:
+
+- `semanticSimilarity`
+- `lexicalScore`
+- `rerankScore`
+- `retrievalMode`
 
 ## Manual RAG checks
 
@@ -1298,6 +1370,33 @@ Expected response:
 
 The exact numbers may differ when seed data or article content changes.
 
+### 6a. Test incremental indexing
+
+Run incremental indexing after the full index has already been built:
+
+```powershell
+Invoke-RestMethod `
+    -Uri "http://localhost:4000/ai/rag/index" `
+    -Method Post `
+    -Headers @{ Authorization = "Bearer $token" } `
+    -ContentType "application/json" `
+    -Body '{"onlyPublished":true,"incremental":true}' | ConvertTo-Json -Depth 20
+```
+
+If article content was not changed after the previous full index, the response should usually show:
+
+```json
+{
+  "indexedArticles": 0,
+  "indexedChunks": 0,
+  "vectorCollection": "knowledge_hub_articles",
+  "skippedArticles": 2,
+  "removedArticles": 0,
+  "indexingMode": "incremental"
+}
+```
+
+
 ### 7. Check Qdrant collection
 
 ```bash
@@ -1324,6 +1423,8 @@ $search = Invoke-RestMethod `
 
 $search | ConvertTo-Json -Depth 20
 ```
+
+For Hacker scope verification, check that search results include optional fields such as `semanticSimilarity`, `lexicalScore`, `rerankScore`, and `retrievalMode`.
 
 ### 9. Test RAG chat
 
@@ -1580,7 +1681,10 @@ Including `updatedAt` prevents stale cached AI responses after the article is up
 - Gemini free-tier quotas can limit indexing and chat requests because both embeddings and generation call Gemini.
 - Indexing large datasets can be slow because embeddings are generated through an external API.
 - Qdrant data is persisted in a Docker volume. Old data can remain until the collection is recreated or the volume is removed.
-- Full reindex recreates the RAG collection. This is simple and consistent, but not optimized for very large datasets.
+- Full reindex recreates the RAG collection. This is simple and consistent, but can be slow for very large datasets.
+- Incremental indexing reduces repeated work by skipping unchanged articles, but it is request-driven and not a background worker.
+- Hybrid lexical retrieval scans stored Qdrant payload chunks, which is acceptable for the course dataset but would need a dedicated lexical index for large production datasets.
+- Secondary reranking is deterministic and local; it does not call a separate reranker model.
 - Selective reindex is idempotent for provided article ids, but automatic background indexing is not implemented.
 - RAG chat memory is in-memory only and is lost when the application restarts.
 - Model availability can differ by Google account, project, quota, and region.
