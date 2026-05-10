@@ -33,10 +33,19 @@ export class RagIndexService {
     async reindex(request: ReindexRequestDto): Promise<RagIndexResponse> {
         var articles = await this.findArticlesForIndexing(request);
         var chunks = this.createChunks(articles);
+        var isSelectiveReindex = typeof request.articleIds !== "undefined";
 
         await this.vectorStore.checkHealth();
 
+        if (isSelectiveReindex) {
+            await this.deleteExistingArticlePointsByIds(request.articleIds ?? []);
+        }
+
         if (chunks.length === 0) {
+            if (!isSelectiveReindex) {
+                await this.vectorStore.deleteCollectionIfExists();
+            }
+
             return {
                 indexedArticles: articles.length
                 , indexedChunks: 0
@@ -44,18 +53,22 @@ export class RagIndexService {
             };
         }
 
-        await this.deleteExistingArticlePoints(articles);
-
         var embeddings = await this.createEmbeddings(chunks);
         var vectorSize = embeddings[0].values.length;
 
-        await this.vectorStore.ensureCollection(vectorSize);
+        if (isSelectiveReindex) {
+            await this.vectorStore.ensureCollection(vectorSize);
+        } else {
+            await this.vectorStore.recreateCollection(vectorSize);
+        }
+
         await this.vectorStore.upsertPoints(this.createPoints(chunks, embeddings));
 
         this.logger.log("RAG index refreshed", "RagIndexService", {
             indexedArticles: articles.length
             , indexedChunks: chunks.length
-            , vectorCollection: this.config.getVectorCollection(),
+            , vectorCollection: this.config.getVectorCollection()
+            , reindexMode: isSelectiveReindex ? "selective" : "full"
         });
 
         return {
@@ -124,9 +137,9 @@ export class RagIndexService {
         );
     }
 
-    private async deleteExistingArticlePoints(articles: RagIndexArticle[]): Promise<void> {
-        for (var article of articles) {
-            await this.vectorStore.deleteByArticleId(article.id);
+    private async deleteExistingArticlePointsByIds(articleIds: string[]): Promise<void> {
+        for (var articleId of articleIds) {
+            await this.vectorStore.deleteByArticleId(articleId);
         }
     }
 

@@ -33,12 +33,26 @@ export class QdrantVectorStoreService {
             return;
         }
 
-        await this.request("PUT", `/collections/${encodeURIComponent(collectionName)}`, {
-            vectors: {
-                size: vectorSize,
-                distance: "Cosine",
-            },
-        });
+        await this.createCollection(vectorSize);
+    }
+
+    async recreateCollection(vectorSize: number): Promise<void> {
+        await this.deleteCollectionIfExists();
+        await this.createCollection(vectorSize);
+    }
+
+    async deleteCollectionIfExists(): Promise<void> {
+        var collectionName = this.config.getVectorCollection();
+
+        try {
+            await this.request("DELETE", `/collections/${encodeURIComponent(collectionName)}`);
+        } catch (error) {
+            if (this.isNotFoundError(error)) {
+                return;
+            }
+
+            throw error;
+        }
     }
 
     async upsertPoints(points: QdrantPoint[]): Promise<void> {
@@ -109,6 +123,17 @@ export class QdrantVectorStoreService {
         );
 
         return existingCount;
+    }
+
+    private async createCollection(vectorSize: number): Promise<void> {
+        var collectionName = this.config.getVectorCollection();
+
+        await this.request("PUT", `/collections/${encodeURIComponent(collectionName)}`, {
+            vectors: {
+                size: vectorSize
+                , distance: "Cosine"
+            }
+        });
     }
 
     private async collectionExists(collectionName: string): Promise<boolean> {
