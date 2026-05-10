@@ -1,4 +1,7 @@
-import { Injectable } from "@nestjs/common";
+import {
+    Injectable
+    , NotFoundException
+} from "@nestjs/common";
 import { createHash } from "node:crypto";
 import { GeminiService } from "../ai/gemini.service";
 import { AppLoggerService } from "../common/logger/app-logger.service";
@@ -60,6 +63,22 @@ export class RagIndexService {
             , indexedChunks: chunks.length
             , vectorCollection: this.config.getVectorCollection()
         };
+    }
+
+    async deleteArticleFromIndex(articleId: string): Promise<void> {
+        await this.vectorStore.checkHealth();
+
+        var deletedCount = await this.vectorStore.deleteByArticleId(articleId);
+
+        if (deletedCount === 0) {
+            throw new NotFoundException("Article vectors were not found in RAG index");
+        }
+
+        this.logger.log("Article vectors were deleted from RAG index", "RagIndexService", {
+            articleId
+            , deletedCount
+            , vectorCollection: this.config.getVectorCollection()
+        });
     }
 
     private async findArticlesForIndexing(

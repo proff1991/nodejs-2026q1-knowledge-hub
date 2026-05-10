@@ -1,15 +1,20 @@
 import {
     Body
     , Controller
+    , Delete
     , Get
     , HttpCode
     , HttpStatus
     , Param
+    , ParseUUIDPipe
     , Post
 } from "@nestjs/common";
 import {
     ApiBearerAuth
+    , ApiNoContentResponse
+    , ApiNotFoundResponse
     , ApiOkResponse
+    , ApiParam
     , ApiTags
 } from "@nestjs/swagger";
 import { RagChatRequestDto } from "./dto/rag-chat-request.dto";
@@ -34,6 +39,20 @@ export class RagController {
     @ApiOkResponse({ description: "Knowledge Hub articles were indexed into vector storage" })
     reindex(@Body() reindexRequestDto: ReindexRequestDto) {
         return this.ragIndexService.reindex(reindexRequestDto);
+    }
+
+    @Delete("index/articles/:articleId")
+    @HttpCode(HttpStatus.NO_CONTENT)
+    @ApiParam({
+        name: "articleId"
+        , example: "550e8400-e29b-41d4-a716-446655440000"
+    })
+    @ApiNoContentResponse({ description: "Article vectors were removed from RAG index" })
+    @ApiNotFoundResponse({ description: "Article vectors were not found in RAG index" })
+    deleteArticleFromIndex(
+        @Param("articleId", new ParseUUIDPipe({ version: "4" })) articleId: string
+    ): Promise<void> {
+        return this.ragIndexService.deleteArticleFromIndex(articleId);
     }
 
     @Post("search")
