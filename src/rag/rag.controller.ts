@@ -8,6 +8,7 @@ import {
     , Param
     , ParseUUIDPipe
     , Post
+    , UseGuards
 } from "@nestjs/common";
 import {
     ApiBearerAuth
@@ -17,6 +18,7 @@ import {
     , ApiParam
     , ApiTags
 } from "@nestjs/swagger";
+import { AiRateLimitGuard } from "../ai/ai-rate-limit.guard";
 import { RagChatRequestDto } from "./dto/rag-chat-request.dto";
 import { RagSearchRequestDto } from "./dto/rag-search-request.dto";
 import { ReindexRequestDto } from "./dto/reindex-request.dto";
@@ -26,6 +28,7 @@ import { RagSearchService } from "./rag-search.service";
 
 @ApiTags("ai-rag")
 @ApiBearerAuth()
+@UseGuards(AiRateLimitGuard)
 @Controller("ai/rag")
 export class RagController {
     constructor(
