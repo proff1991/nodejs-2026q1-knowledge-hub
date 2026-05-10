@@ -3,6 +3,7 @@ import {
     , InternalServerErrorException
     , ServiceUnavailableException
 } from "@nestjs/common";
+import { AppLoggerService } from "../common/logger/app-logger.service";
 import {
     GeminiBatchEmbedContentRequest
     , GeminiBatchEmbedContentResponse
@@ -22,6 +23,8 @@ export class GeminiService {
     private readonly requestTimeoutMs = 30000;
     private readonly maxRetries = 3;
 
+    constructor(private readonly logger: AppLoggerService) { }
+
     async generateText(
         prompt: string,
         options?: {
@@ -38,8 +41,19 @@ export class GeminiService {
                 lastError = error;
 
                 if (!this.shouldRetry(error, attempt)) {
+                    this.logGeminiFailure("Gemini text generation failed", error, {
+                        attempt
+                        , operation: "generateText"
+                    });
+
                     throw error;
                 }
+
+                this.logGeminiFailure("Gemini text generation retry scheduled", error, {
+                    attempt
+                    , operation: "generateText"
+                    , retryAfterMs: this.getBackoffMs(attempt)
+                });
 
                 await this.delay(this.getBackoffMs(attempt));
             }
@@ -68,8 +82,21 @@ export class GeminiService {
                 lastError = error;
 
                 if (!this.shouldRetry(error, attempt)) {
+                    this.logGeminiFailure("Gemini embeddings failed", error, {
+                        attempt
+                        , operation: "embedTexts"
+                        , textsCount: texts.length
+                    });
+
                     throw error;
                 }
+
+                this.logGeminiFailure("Gemini embeddings retry scheduled", error, {
+                    attempt
+                    , operation: "embedTexts"
+                    , textsCount: texts.length
+                    , retryAfterMs: this.getBackoffMs(attempt)
+                });
 
                 await this.delay(this.getBackoffMs(attempt));
             }
@@ -148,6 +175,10 @@ export class GeminiService {
                 signal: controller.signal,
             });
         } catch (error) {
+            this.logGeminiFailure("Gemini text generation network request failed", error, {
+                operation: "generateContent"
+            });
+
             if (error instanceof Error && error.name === "AbortError") {
                 throw new ServiceUnavailableException("Gemini API request timed out");
             }
@@ -177,6 +208,11 @@ export class GeminiService {
                 signal: controller.signal,
             });
         } catch (error) {
+            this.logGeminiFailure("Gemini embeddings network request failed", error, {
+                operation: "batchEmbedContents"
+                , textsCount: texts.length
+            });
+
             if (error instanceof Error && error.name === "AbortError") {
                 throw new ServiceUnavailableException("Gemini API embedding request timed out");
             }
@@ -359,6 +395,19 @@ export class GeminiService {
         var upstreamStatus = errorResponse.error?.status;
         var retryAfter = this.extractRetryAfter(errorResponse);
 
+        this.logger.error(
+            "Gemini API returned an error response"
+            , undefined
+            , "GeminiService"
+            , {
+                statusCode
+                , upstreamStatus
+                , attempt
+                , retryAfter
+                , message: errorResponse.error?.message
+            }
+        );
+
         if (statusCode === 401 || statusCode === 403) {
             throw new InternalServerErrorException("Gemini API authentication failed");
         }
@@ -405,6 +454,26 @@ export class GeminiService {
 
     private delay(ms: number): Promise<void> {
         return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+
+    private logGeminiFailure(
+        message: string
+        , error: unknown
+        , metadata: Record<string, unknown>
+    ): void {
+        var errorMessage = error instanceof Error
+            ? error.message
+            : "Unknown Gemini error";
+
+        this.logger.error(
+            message
+            , undefined
+            , "GeminiService"
+            , {
+                ...metadata
+                , error: errorMessage
+            }
+        );
     }
 
     private extractRetryAfter(errorResponse: GeminiErrorResponse): number | null {
